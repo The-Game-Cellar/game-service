@@ -1,0 +1,47 @@
+services:
+  game-db:
+    image: postgres:17
+    container_name: game_db
+    environment:
+      POSTGRES_DB: ${GAME_DB_NAME}
+      POSTGRES_USER: ${GAME_DB_USERNAME}
+      POSTGRES_PASSWORD: ${GAME_DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - game_db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GAME_DB_USERNAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - game-cellar-network
+
+  library-db:
+    image: postgres:17
+    container_name: library_db
+    environment:
+      POSTGRES_DB: ${LIBRARY_DB_NAME}
+      POSTGRES_USER: ${LIBRARY_DB_USERNAME}
+      POSTGRES_PASSWORD: ${LIBRARY_DB_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - library_db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LIBRARY_DB_USERNAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - game-cellar-network
+
+volumes:
+  game_db_data:
+  library_db_data:
+
+networks:
+  game-cellar-network:
