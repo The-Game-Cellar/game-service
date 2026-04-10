@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: game-service
+  datasource:
+    url: ${GAME_DB_URL}
+    username: ${GAME_DB_USERNAME}
+    password: ${GAME_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+
+server:
+  port: ${GAME_SERVICE_PORT:8081}
+
+rawg:
+  api:
+    key: ${RAWG_API_KEY}
+    base-url: ${RAWG_API_BASE_URL:https://api.rawg.io/api}
