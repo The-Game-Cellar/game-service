@@ -19,8 +19,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class
 GameMapperTest {
 
-    // --- toEntity ---
-
     @Test
     void shouldMapRawgDtoToEntity() {
         RawgGameDto dto = buildDto();
@@ -61,8 +59,6 @@ GameMapperTest {
         assertThat(entity.getDevelopers()).isNull();
     }
 
-    // --- toGenreEntities ---
-
     @Test
     void shouldMapGenresToEntities() {
         RawgGameDto dto = buildDto();
@@ -84,8 +80,6 @@ GameMapperTest {
 
         assertThat(genres).isEmpty();
     }
-
-    // --- toTagEntities ---
 
     @Test
     void shouldMapTagsToEntities() {
@@ -109,21 +103,17 @@ GameMapperTest {
         assertThat(tags).isEmpty();
     }
 
-    // --- toPlatformEntities ---
-
     @Test
     void shouldSkipPlatformEntriesWithNullPlatform() {
         RawgGameDto dto = new RawgGameDto();
         RawgPlatformEntry entry = new RawgPlatformEntry();
-        entry.setPlatform(null); // null inner platform
+        entry.setPlatform(null);
         dto.setPlatforms(List.of(entry));
 
         List<GamePlatform> platforms = GameMapper.toPlatformEntities(dto, new Game());
 
         assertThat(platforms).isEmpty();
     }
-
-    // --- toResponse (from entity) ---
 
     @Test
     void shouldMapEntityToResponse() {
@@ -173,8 +163,6 @@ GameMapperTest {
         assertThat(response.getDevelopers()).isEmpty();
     }
 
-    // --- toResponseFromRawg ---
-
     @Test
     void shouldMapRawgDtoDirectlyToResponse() {
         RawgGameDto dto = buildDto();
@@ -202,8 +190,6 @@ GameMapperTest {
         assertThat(response.getDevelopers()).isEmpty();
         assertThat(response.getMoods()).isEmpty();
     }
-
-    // --- helpers ---
 
     private RawgGameDto buildDto() {
         RawgNamedEntity genre = new RawgNamedEntity();

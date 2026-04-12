@@ -8,8 +8,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class MoodMapperTest {
 
-    // --- getMoods: tag-based ---
-
     @Test
     void shouldMapTagToMood() {
         List<String> moods = MoodMapper.getMoods(List.of("Story Rich"), List.of());
@@ -40,8 +38,6 @@ class MoodMapperTest {
 
         assertThat(moods).contains("Exploration", "Epic");
     }
-
-    // --- getMoods: genre fallback ---
 
     @Test
     void shouldFallBackToGenreIfNoTagMoodsFound() {
@@ -87,8 +83,6 @@ class MoodMapperTest {
         assertThat(moods).isEmpty();
     }
 
-    // --- getTagsForMood ---
-
     @Test
     void shouldReturnTagsForGivenMood() {
         List<String> tags = MoodMapper.getTagsForMood("Story-driven");
@@ -102,8 +96,6 @@ class MoodMapperTest {
 
         assertThat(tags).isEmpty();
     }
-
-    // --- getAllMoods ---
 
     @Test
     void shouldReturnAllMoodsSorted() {

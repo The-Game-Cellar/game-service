@@ -44,6 +44,7 @@ logs/
 ### OS ###
 .DS_Store
 Thumbs.db
+*.stackdump
 
 ### Spring Boot local config ###
 application-local.yml

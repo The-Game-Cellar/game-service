@@ -158,10 +158,6 @@ public class MoodMapper {
         GENRE_TO_MOODS.put("Educational",           List.of("Meditative", "Creative"));
     }
 
-    /**
-     * Returns all tags (lowercase) that map to the given mood.
-     * Used for reverse-lookup when filtering games by mood.
-     */
     public static List<String> getTagsForMood(String mood) {
         return TAG_TO_MOODS.entrySet().stream()
                 .filter(entry -> entry.getValue().contains(mood))
@@ -169,9 +165,6 @@ public class MoodMapper {
                 .toList();
     }
 
-    /**
-     * Returns all distinct mood names available in the system.
-     */
     public static List<String> getAllMoods() {
         return TAG_TO_MOODS.values().stream()
                 .flatMap(List::stream)
@@ -180,12 +173,6 @@ public class MoodMapper {
                 .toList();
     }
 
-    /**
-     * Returns moods for a game.
-     * Layer 1: Check tags first (high precision).
-     * Layer 2: Fall back to genres if no tag-based moods found.
-     * Returns deduplicated list preserving insertion order.
-     */
     public static List<String> getMoods(List<String> tags, List<String> genres) {
         Set<String> moods = new LinkedHashSet<>();
 

@@ -85,8 +85,6 @@ class GameServiceTest {
         rawgDto.setPlatforms(List.of());
     }
 
-    // --- Cache hit ---
-
     @Test
     void shouldReturnCachedGameIfExists() {
         when(gameRepository.findByRawgId(3328)).thenReturn(Optional.of(cachedGame));
@@ -96,8 +94,6 @@ class GameServiceTest {
         assertThat(result.getName()).isEqualTo("The Witcher 3: Wild Hunt");
         verify(rawgApiClient, never()).fetchGameById(any());
     }
-
-    // --- Cache miss ---
 
     @Test
     void shouldFetchFromRawgIfNotCached() {
@@ -124,8 +120,6 @@ class GameServiceTest {
         assertThat(captor.getValue().getRawgId()).isEqualTo(3328);
     }
 
-    // --- Stale cache (cached game with no tags) ---
-
     @Test
     void shouldRefetchFromRawgIfCachedGameHasNoTags() {
         Game gameWithoutTags = Game.builder()
@@ -134,7 +128,7 @@ class GameServiceTest {
                 .name("The Witcher 3: Wild Hunt")
                 .genres(new ArrayList<>())
                 .platforms(new ArrayList<>())
-                .tags(new ArrayList<>()) // stale - no tags
+                .tags(new ArrayList<>())
                 .build();
 
         when(gameRepository.findByRawgId(3328)).thenReturn(Optional.of(gameWithoutTags));
@@ -156,8 +150,6 @@ class GameServiceTest {
         verify(rawgApiClient, never()).fetchGameById(any());
     }
 
-    // --- Exception handling ---
-
     @Test
     void shouldPropagateGameNotFoundExceptionFromRawg() {
         when(gameRepository.findByRawgId(9999)).thenReturn(Optional.empty());
@@ -176,8 +168,6 @@ class GameServiceTest {
         assertThatThrownBy(() -> gameService.getGameById(3328))
                 .isInstanceOf(RawgApiException.class);
     }
-
-    // --- Search by mood ---
 
     @Test
     void shouldReturnEmptyResultForUnknownMood() {
@@ -222,8 +212,6 @@ class GameServiceTest {
         assertThat(page1.getGames()).hasSize(2);
     }
 
-    // --- getGenres / getPlatforms fallback ---
-
     @Test
     void shouldReturnCachedGenresIfAvailable() {
         when(gameGenreRepository.findAllDistinctGenreNames()).thenReturn(List.of("Action", "RPG"));
@@ -259,8 +247,6 @@ class GameServiceTest {
         assertThat(platforms).containsExactly("PC", "PlayStation 5");
         verifyNoInteractions(rawgApiClient);
     }
-
-    // --- Search games (delegates to RAWG) ---
 
     @Test
     void shouldReturnSearchResultsFromRawg() {
