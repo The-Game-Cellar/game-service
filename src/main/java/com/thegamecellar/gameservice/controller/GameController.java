@@ -55,6 +55,12 @@ public class GameController {
         return ResponseEntity.ok(gameService.getUpcomingGames(platform));
     }
 
+    @GetMapping("/random")
+    public ResponseEntity<GameSearchResponse> getRandomGames(
+            @RequestParam(defaultValue = "20") int limit) {
+        return ResponseEntity.ok(gameService.getRandomGames(limit));
+    }
+
     @GetMapping("/genres")
     public ResponseEntity<Map<String, List<String>>> getGenres() {
         return ResponseEntity.ok(Map.of("genres", gameService.getGenres()));

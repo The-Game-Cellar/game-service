@@ -160,7 +160,8 @@ public class MoodMapper {
 
     public static List<String> getTagsForMood(String mood) {
         return TAG_TO_MOODS.entrySet().stream()
-                .filter(entry -> entry.getValue().contains(mood))
+                .filter(entry -> entry.getValue().stream()
+                        .anyMatch(m -> m.equalsIgnoreCase(mood)))
                 .map(Map.Entry::getKey)
                 .toList();
     }

@@ -21,6 +21,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.data.domain.Pageable;
+
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +31,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -132,6 +135,30 @@ class GameServiceTest {
                 .build();
 
         when(gameRepository.findByRawgId(3328)).thenReturn(Optional.of(gameWithoutTags));
+        when(rawgApiClient.fetchGameById(3328)).thenReturn(rawgDto);
+        when(gameRepository.save(any(Game.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        gameService.getGameById(3328);
+
+        verify(rawgApiClient).fetchGameById(3328);
+        verify(gameRepository).save(any(Game.class));
+    }
+
+    @Test
+    void shouldRefetchFromRawgIfCachedGameHasNoGenres() {
+        GameTag tag = new GameTag();
+        tag.setTagName("Story Rich");
+
+        Game gameWithoutGenres = Game.builder()
+                .id(1L)
+                .rawgId(3328)
+                .name("The Witcher 3: Wild Hunt")
+                .genres(new ArrayList<>())
+                .platforms(new ArrayList<>())
+                .tags(new ArrayList<>(List.of(tag)))
+                .build();
+
+        when(gameRepository.findByRawgId(3328)).thenReturn(Optional.of(gameWithoutGenres));
         when(rawgApiClient.fetchGameById(3328)).thenReturn(rawgDto);
         when(gameRepository.save(any(Game.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -262,5 +289,51 @@ class GameServiceTest {
         assertThat(result.getTotalCount()).isEqualTo(1);
         assertThat(result.getGames()).hasSize(1);
         assertThat(result.getGames().get(0).getName()).isEqualTo("The Witcher 3: Wild Hunt");
+    }
+
+    @Test
+    void shouldServeGenreSearchFromCacheWhenEnoughGamesPresent() {
+        List<Game> cachedGames = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            cachedGames.add(Game.builder()
+                    .id((long) i).rawgId(i).name("RPG Game " + i)
+                    .genres(new ArrayList<>()).platforms(new ArrayList<>()).tags(new ArrayList<>())
+                    .build());
+        }
+        when(gameRepository.findByGenreName(eq("RPG"), any(Pageable.class))).thenReturn(cachedGames);
+
+        GameSearchResponse result = gameService.searchGames(null, null, "RPG", 1, 20);
+
+        assertThat(result.getGames()).hasSize(6);
+        assertThat(result.getTotalCount()).isEqualTo(6);
+        verifyNoInteractions(rawgApiClient);
+    }
+
+    @Test
+    void shouldServeBroadPoolWhenGenreCacheEmptyButDbHasGames() {
+        when(gameRepository.findByGenreName(eq("RPG"), any(Pageable.class))).thenReturn(List.of());
+        when(gameRepository.findRecentGames(any())).thenReturn(List.of(cachedGame));
+
+        GameSearchResponse result = gameService.searchGames(null, null, "RPG", 0, 20);
+
+        assertThat(result.getGames()).hasSize(1);
+        verifyNoInteractions(rawgApiClient);
+    }
+
+    @Test
+    void shouldFallThroughToRawgWhenGenreCacheEmptyAndDbEmpty() {
+        RawgSearchResponse rawgResponse = new RawgSearchResponse();
+        rawgResponse.setCount(1);
+        rawgResponse.setResults(List.of(rawgDto));
+
+        when(gameRepository.findByGenreName(eq("RPG"), any(Pageable.class))).thenReturn(List.of());
+        when(gameRepository.findRecentGames(any())).thenReturn(List.of()); // broad pool also empty → fall through
+        when(rawgApiClient.searchGames(null, null, "RPG", 0, 20)).thenReturn(rawgResponse);
+        when(gameRepository.findByRawgId(3328)).thenReturn(Optional.of(cachedGame));
+
+        GameSearchResponse result = gameService.searchGames(null, null, "RPG", 0, 20);
+
+        assertThat(result.getGames()).hasSize(1);
+        verify(rawgApiClient).searchGames(null, null, "RPG", 0, 20);
     }
 }

@@ -91,6 +91,20 @@ class MoodMapperTest {
     }
 
     @Test
+    void shouldReturnTagsForMoodCaseInsensitively() {
+        List<String> tags = MoodMapper.getTagsForMood("story-driven");
+
+        assertThat(tags).contains("story rich", "choices matter", "narrative");
+    }
+
+    @Test
+    void shouldReturnTagsForLowercaseMood() {
+        List<String> tags = MoodMapper.getTagsForMood("chill");
+
+        assertThat(tags).contains("relaxing", "casual", "peaceful");
+    }
+
+    @Test
     void shouldReturnEmptyListForUnknownMood() {
         List<String> tags = MoodMapper.getTagsForMood("nonexistentmood");
 
