@@ -1,5 +1,6 @@
 package com.thegamecellar.gameservice.service;
 
+import com.thegamecellar.gameservice.exception.RawgApiException;
 import com.thegamecellar.gameservice.model.dto.GameResponse;
 import com.thegamecellar.gameservice.model.dto.GameSearchResponse;
 import com.thegamecellar.gameservice.model.dto.rawg.RawgGameDto;
@@ -12,9 +13,12 @@ import com.thegamecellar.gameservice.util.GameMapper;
 import com.thegamecellar.gameservice.util.MoodMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,10 +38,16 @@ public class GameService {
 
         if (cached.isPresent()) {
             Game game = cached.get();
-            if (game.getTags().isEmpty()) {
-                log.info("Cache hit but tags missing for game id={}, refreshing from RAWG", rawgId);
+            if (game.getTags().isEmpty() || game.getGenres().isEmpty()) {
+                log.info("Cache hit but data incomplete for game id={} (tags={}, genres={}), refreshing from RAWG",
+                        rawgId, game.getTags().size(), game.getGenres().size());
                 RawgGameDto dto = rawgApiClient.fetchGameById(rawgId);
-                game.getTags().addAll(GameMapper.toTagEntities(dto, game));
+                if (game.getTags().isEmpty()) {
+                    game.getTags().addAll(GameMapper.toTagEntities(dto, game));
+                }
+                if (game.getGenres().isEmpty()) {
+                    game.getGenres().addAll(GameMapper.toGenreEntities(dto, game));
+                }
                 return GameMapper.toResponse(gameRepository.save(game));
             }
             log.info("Cache hit for game id={}", rawgId);
@@ -77,20 +87,70 @@ public class GameService {
 
     @Transactional
     public GameSearchResponse searchGames(String query, String platform, String genre, int page, int pageSize) {
-        RawgSearchResponse rawgResponse = rawgApiClient.searchGames(query, platform, genre, page, pageSize);
-        List<GameResponse> games = rawgResponse.getResults().stream()
-                .map(dto -> {
-                    cacheIfAbsent(dto);
-                    return GameMapper.toResponseFromRawg(dto);
-                })
-                .toList();
+        // Cache-first for genre-only searches (used by recommendation algorithm).
+        // If game_db has ≥5 cached games for this genre, serve them directly to avoid
+        // hammering RAWG on every recommendation request.
+        if ((query == null || query.isBlank()) && genre != null && !genre.isBlank()) {
+            // Load pageSize*3 games max — avoids N+1 explosion loading thousands of EAGER collections.
+            List<Game> cached = gameRepository.findByGenreName(genre, PageRequest.of(0, pageSize * 3));
+            if (!cached.isEmpty()) {
+                log.info("Genre cache hit: genre={}, loaded {} games (pool of {}x pageSize)", genre, cached.size(), 3);
+                List<Game> shuffled = new ArrayList<>(cached);
+                Collections.shuffle(shuffled);
+                List<GameResponse> paged = shuffled.stream()
+                        .limit(pageSize)
+                        .map(GameMapper::toResponse)
+                        .toList();
+                return GameSearchResponse.builder()
+                        .games(paged)
+                        .totalCount(cached.size())
+                        .page(page)
+                        .pageSize(pageSize)
+                        .build();
+            }
+            log.info("Genre cache empty for genre={}, trying broad pool fallback", genre);
+            // Broad pool fallback: serve recent cached games so Recommendation Service
+            // similarity scorer can rank them by genre relevance — Action/RPG games
+            // score high, Racing/Sports score 0 against the user's profile.
+            List<Game> broadPool = gameRepository.findRecentGames(PageRequest.of(0, pageSize * 3));
+            if (!broadPool.isEmpty()) {
+                log.info("Serving broad pool of {} recent games for genre='{}'", broadPool.size(), genre);
+                List<Game> shuffled = new ArrayList<>(broadPool);
+                Collections.shuffle(shuffled);
+                return GameSearchResponse.builder()
+                        .games(shuffled.stream().limit(pageSize).map(GameMapper::toResponse).toList())
+                        .totalCount(broadPool.size())
+                        .page(page)
+                        .pageSize(pageSize)
+                        .build();
+            }
+            log.info("DB empty, falling through to RAWG for genre={}", genre);
+        }
 
-        return GameSearchResponse.builder()
-                .games(games)
-                .totalCount(rawgResponse.getCount())
-                .page(page)
-                .pageSize(pageSize)
-                .build();
+        try {
+            RawgSearchResponse rawgResponse = rawgApiClient.searchGames(query, platform, genre, page, pageSize);
+            List<GameResponse> games = rawgResponse.getResults().stream()
+                    .map(dto -> {
+                        cacheIfAbsent(dto);
+                        return GameMapper.toResponseFromRawg(dto);
+                    })
+                    .toList();
+
+            return GameSearchResponse.builder()
+                    .games(games)
+                    .totalCount(rawgResponse.getCount())
+                    .page(page)
+                    .pageSize(pageSize)
+                    .build();
+        } catch (RawgApiException ex) {
+            log.warn("RAWG search unavailable (query={}, genre={}): {}", query, genre, ex.getMessage());
+            return GameSearchResponse.builder()
+                    .games(List.of())
+                    .totalCount(0)
+                    .page(page)
+                    .pageSize(pageSize)
+                    .build();
+        }
     }
 
     @Transactional
@@ -123,6 +183,19 @@ public class GameService {
                 .totalCount(rawgResponse.getCount())
                 .page(0)
                 .pageSize(20)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public GameSearchResponse getRandomGames(int limit) {
+        List<GameResponse> games = gameRepository.findRandom(limit).stream()
+                .map(GameMapper::toResponse)
+                .toList();
+        return GameSearchResponse.builder()
+                .games(games)
+                .totalCount(games.size())
+                .page(0)
+                .pageSize(limit)
                 .build();
     }
 
