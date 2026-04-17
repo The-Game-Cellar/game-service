@@ -67,6 +67,7 @@ class GameServiceTest {
                 .id(1L)
                 .rawgId(3328)
                 .name("The Witcher 3: Wild Hunt")
+                .description("A story-driven open world RPG.")
                 .rating(new BigDecimal("4.66"))
                 .genres(new ArrayList<>(List.of(genre)))
                 .platforms(new ArrayList<>())
