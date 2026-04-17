@@ -38,15 +38,18 @@ public class GameService {
 
         if (cached.isPresent()) {
             Game game = cached.get();
-            if (game.getTags().isEmpty() || game.getGenres().isEmpty()) {
-                log.info("Cache hit but data incomplete for game id={} (tags={}, genres={}), refreshing from RAWG",
-                        rawgId, game.getTags().size(), game.getGenres().size());
+            if (game.getTags().isEmpty() || game.getGenres().isEmpty() || game.getDescription() == null || game.getDescription().isBlank()) {
+                log.info("Cache hit but data incomplete for game id={} (tags={}, genres={}, description={}), refreshing from RAWG",
+                        rawgId, game.getTags().size(), game.getGenres().size(), game.getDescription() != null ? "present" : "null");
                 RawgGameDto dto = rawgApiClient.fetchGameById(rawgId);
                 if (game.getTags().isEmpty()) {
                     game.getTags().addAll(GameMapper.toTagEntities(dto, game));
                 }
                 if (game.getGenres().isEmpty()) {
                     game.getGenres().addAll(GameMapper.toGenreEntities(dto, game));
+                }
+                if (game.getDescription() == null || game.getDescription().isBlank()) {
+                    game.setDescription(dto.getDescriptionRaw());
                 }
                 return GameMapper.toResponse(gameRepository.save(game));
             }
