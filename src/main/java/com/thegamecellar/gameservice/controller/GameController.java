@@ -4,13 +4,17 @@ import com.thegamecellar.gameservice.model.dto.GameResponse;
 import com.thegamecellar.gameservice.model.dto.GameSearchResponse;
 import com.thegamecellar.gameservice.service.GameService;
 import com.thegamecellar.gameservice.util.MoodMapper;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
 
+@Validated
 @RestController
 @RequestMapping("/api/v1/games")
 @RequiredArgsConstructor
@@ -29,8 +33,8 @@ public class GameController {
             @RequestParam(required = false) String platform,
             @RequestParam(required = false) String genre,
             @RequestParam(required = false) String mood,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int pageSize) {
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         if (mood != null && !mood.isBlank()) {
             return ResponseEntity.ok(gameService.searchByMood(mood, page, pageSize));
         }
@@ -57,7 +61,7 @@ public class GameController {
 
     @GetMapping("/random")
     public ResponseEntity<GameSearchResponse> getRandomGames(
-            @RequestParam(defaultValue = "20") int limit) {
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
         return ResponseEntity.ok(gameService.getRandomGames(limit));
     }
 
