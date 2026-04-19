@@ -213,13 +213,7 @@ public class GameService {
     }
 
     public List<String> getPlatforms() {
-        List<String> cached = gamePlatformRepository.findAllDistinctPlatformNames();
-        if (!cached.isEmpty()) {
-            return cached;
-        }
-        return rawgApiClient.fetchPlatforms().getResults().stream()
-                .map(p -> p.getName())
-                .toList();
+        return List.of("PC", "PlayStation 5", "PlayStation 4", "Xbox Series S/X", "Xbox One", "Nintendo Switch");
     }
 
     private void cacheIfAbsent(RawgGameDto dto) {

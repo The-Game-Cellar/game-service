@@ -267,13 +267,13 @@ class GameServiceTest {
     }
 
     @Test
-    void shouldReturnCachedPlatformsIfAvailable() {
-        when(gamePlatformRepository.findAllDistinctPlatformNames()).thenReturn(List.of("PC", "PlayStation 5"));
-
+    void shouldReturnCuratedPlatformList() {
         List<String> platforms = gameService.getPlatforms();
 
-        assertThat(platforms).containsExactly("PC", "PlayStation 5");
+        assertThat(platforms).containsExactly(
+                "PC", "PlayStation 5", "PlayStation 4", "Xbox Series S/X", "Xbox One", "Nintendo Switch");
         verifyNoInteractions(rawgApiClient);
+        verifyNoInteractions(gamePlatformRepository);
     }
 
     @Test
