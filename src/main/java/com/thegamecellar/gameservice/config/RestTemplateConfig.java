@@ -5,14 +5,18 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.List;
+
 @Configuration
 public class RestTemplateConfig {
 
     @Bean
-    public RestTemplate restTemplate() {
+    public RestTemplate restTemplate(RawgKeyInterceptor rawgKeyInterceptor) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(2000);
         factory.setReadTimeout(2000);
-        return new RestTemplate(factory);
+        RestTemplate restTemplate = new RestTemplate(factory);
+        restTemplate.setInterceptors(List.of(rawgKeyInterceptor));
+        return restTemplate;
     }
 }

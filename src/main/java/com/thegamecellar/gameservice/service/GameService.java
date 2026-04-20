@@ -17,8 +17,10 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -89,49 +91,79 @@ public class GameService {
     }
 
     @Transactional
-    public GameSearchResponse searchGames(String query, String platform, String genre, int page, int pageSize) {
+    public GameSearchResponse searchGames(String query, String platform, String genre, String ordering, int page, int pageSize) {
+        boolean noFilters = (query == null || query.isBlank())
+                && (genre == null || genre.isBlank())
+                && (platform == null || platform.isBlank());
+
+        // No-filter browse: cache first, RAWG fallback when page exceeds cached pool
+        if (noFilters) {
+            long dbCount = gameRepository.count();
+            if (dbCount > 0) {
+                int poolSize = Math.max(200, (page + 1) * pageSize);
+                List<Game> pool = gameRepository.findRecentGames(PageRequest.of(0, poolSize));
+                List<Game> sorted = new ArrayList<>(pool);
+                applyOrdering(sorted, ordering);
+                int from = page * pageSize;
+                int to = Math.min(from + pageSize, sorted.size());
+                if (from < sorted.size()) {
+                    log.info("No-filter cache hit: serving page={} from {} cached games", page, dbCount);
+                    return GameSearchResponse.builder()
+                            .games(sorted.subList(from, to).stream().map(GameMapper::toResponse).toList())
+                            .totalCount((int) Math.min(dbCount, Integer.MAX_VALUE))
+                            .page(page)
+                            .pageSize(pageSize)
+                            .build();
+                }
+                log.info("No-filter cache: page={} beyond pool, falling through to RAWG", page);
+            }
+        }
+
         // Cache-first for genre-only searches (used by recommendation algorithm).
         // If game_db has ≥5 cached games for this genre, serve them directly to avoid
         // hammering RAWG on every recommendation request.
         if ((query == null || query.isBlank()) && genre != null && !genre.isBlank()) {
-            // Load pageSize*3 games max — avoids N+1 explosion loading thousands of EAGER collections.
             List<Game> cached = gameRepository.findByGenreName(genre, PageRequest.of(0, pageSize * 3));
             if (!cached.isEmpty()) {
                 log.info("Genre cache hit: genre={}, loaded {} games (pool of {}x pageSize)", genre, cached.size(), 3);
-                List<Game> shuffled = new ArrayList<>(cached);
-                Collections.shuffle(shuffled);
-                List<GameResponse> paged = shuffled.stream()
-                        .limit(pageSize)
-                        .map(GameMapper::toResponse)
-                        .toList();
-                return GameSearchResponse.builder()
-                        .games(paged)
-                        .totalCount(cached.size())
-                        .page(page)
-                        .pageSize(pageSize)
-                        .build();
+                List<Game> sorted = new ArrayList<>(cached);
+                applyOrdering(sorted, ordering);
+                int from = page * pageSize;
+                int to = Math.min(from + pageSize, sorted.size());
+                if (from < sorted.size()) {
+                    long genreTotal = gameRepository.countByGenreName(genre);
+                    return GameSearchResponse.builder()
+                            .games(sorted.subList(from, to).stream().map(GameMapper::toResponse).toList())
+                            .totalCount((int) Math.min(genreTotal, Integer.MAX_VALUE))
+                            .page(page)
+                            .pageSize(pageSize)
+                            .build();
+                }
+                log.info("Genre cache: page={} beyond pool size={}, falling through to RAWG", page, sorted.size());
             }
             log.info("Genre cache empty for genre={}, trying broad pool fallback", genre);
-            // Broad pool fallback: serve recent cached games so Recommendation Service
-            // similarity scorer can rank them by genre relevance — Action/RPG games
-            // score high, Racing/Sports score 0 against the user's profile.
             List<Game> broadPool = gameRepository.findRecentGames(PageRequest.of(0, pageSize * 3));
             if (!broadPool.isEmpty()) {
                 log.info("Serving broad pool of {} recent games for genre='{}'", broadPool.size(), genre);
-                List<Game> shuffled = new ArrayList<>(broadPool);
-                Collections.shuffle(shuffled);
-                return GameSearchResponse.builder()
-                        .games(shuffled.stream().limit(pageSize).map(GameMapper::toResponse).toList())
-                        .totalCount(broadPool.size())
-                        .page(page)
-                        .pageSize(pageSize)
-                        .build();
+                List<Game> sorted = new ArrayList<>(broadPool);
+                applyOrdering(sorted, ordering);
+                int from = page * pageSize;
+                int to = Math.min(from + pageSize, sorted.size());
+                if (from < sorted.size()) {
+                    return GameSearchResponse.builder()
+                            .games(sorted.subList(from, to).stream().map(GameMapper::toResponse).toList())
+                            .totalCount((int) Math.min(gameRepository.count(), Integer.MAX_VALUE))
+                            .page(page)
+                            .pageSize(pageSize)
+                            .build();
+                }
+                log.info("Broad pool: page={} beyond pool, falling through to RAWG", page);
             }
             log.info("DB empty, falling through to RAWG for genre={}", genre);
         }
 
         try {
-            RawgSearchResponse rawgResponse = rawgApiClient.searchGames(query, platform, genre, page, pageSize);
+            RawgSearchResponse rawgResponse = rawgApiClient.searchGames(query, platform, genre, ordering, page, pageSize);
             List<GameResponse> games = rawgResponse.getResults().stream()
                     .map(dto -> {
                         cacheIfAbsent(dto);
@@ -214,6 +246,20 @@ public class GameService {
 
     public List<String> getPlatforms() {
         return List.of("PC", "PlayStation 5", "PlayStation 4", "Xbox Series S/X", "Xbox One", "Nintendo Switch");
+    }
+
+    private void applyOrdering(List<Game> games, String ordering) {
+        if (ordering == null || ordering.isBlank() || ordering.equals("-rating")) {
+            games.sort(Comparator.comparing((Game g) -> g.getRating() == null ? BigDecimal.ZERO : g.getRating(), Comparator.reverseOrder()));
+        } else if (ordering.equals("-released")) {
+            games.sort(Comparator.comparing(g -> g.getReleased() == null ? "" : g.getReleased(), Comparator.reverseOrder()));
+        } else if (ordering.equals("released")) {
+            games.sort(Comparator.comparing(g -> g.getReleased() == null ? "" : g.getReleased()));
+        } else if (ordering.equals("name")) {
+            games.sort(Comparator.comparing(g -> g.getName() == null ? "" : g.getName()));
+        } else if (ordering.equals("-name")) {
+            games.sort(Comparator.comparing(g -> g.getName() == null ? "" : g.getName(), Comparator.reverseOrder()));
+        }
     }
 
     private void cacheIfAbsent(RawgGameDto dto) {
