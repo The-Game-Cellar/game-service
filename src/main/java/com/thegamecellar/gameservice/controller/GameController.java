@@ -6,6 +6,7 @@ import com.thegamecellar.gameservice.service.GameService;
 import com.thegamecellar.gameservice.util.MoodMapper;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -33,12 +34,17 @@ public class GameController {
             @RequestParam(required = false) String platform,
             @RequestParam(required = false) String genre,
             @RequestParam(required = false) String mood,
-            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "-rating") @Pattern(regexp = "-rating|-released|released|name|-name") String ordering,
+            @RequestParam(defaultValue = "0") @Min(0) @Max(500) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
-        if (mood != null && !mood.isBlank()) {
+        boolean moodOnly = mood != null && !mood.isBlank()
+                && (query == null || query.isBlank())
+                && (platform == null || platform.isBlank())
+                && (genre == null || genre.isBlank());
+        if (moodOnly) {
             return ResponseEntity.ok(gameService.searchByMood(mood, page, pageSize));
         }
-        return ResponseEntity.ok(gameService.searchGames(query, platform, genre, page, pageSize));
+        return ResponseEntity.ok(gameService.searchGames(query, platform, genre, ordering, page, pageSize));
     }
 
     @GetMapping("/moods")

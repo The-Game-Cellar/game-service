@@ -21,9 +21,6 @@ public class RawgApiClient {
 
     private final RestTemplate restTemplate;
 
-    @Value("${rawg.api.key}")
-    private String apiKey;
-
     @Value("${rawg.api.base-url}")
     private String baseUrl;
 
@@ -34,7 +31,6 @@ public class RawgApiClient {
     public RawgGameDto fetchGameById(Integer rawgId) {
         String url = UriComponentsBuilder
                 .fromUriString(baseUrl + "/games/{id}")
-                .queryParam("key", apiKey)
                 .buildAndExpand(rawgId)
                 .toUriString();
 
@@ -48,12 +44,12 @@ public class RawgApiClient {
         }
     }
 
-    public RawgSearchResponse searchGames(String query, String platform, String genre, int page, int pageSize) {
+    public RawgSearchResponse searchGames(String query, String platform, String genre, String ordering, int page, int pageSize) {
         UriComponentsBuilder builder = UriComponentsBuilder
                 .fromUriString(baseUrl + "/games")
-                .queryParam("key", apiKey)
-                .queryParam("page", page + 1) // RAWG pages are 1-indexed
-                .queryParam("page_size", pageSize);
+                .queryParam("page", page + 1)
+                .queryParam("page_size", pageSize)
+                .queryParam("ordering", ordering != null && !ordering.isBlank() ? ordering : "-rating");
 
         if (query != null && !query.isBlank()) {
             builder.queryParam("search", query);
@@ -77,7 +73,6 @@ public class RawgApiClient {
     public RawgSearchResponse fetchPopularGames(String platform, int page) {
         UriComponentsBuilder builder = UriComponentsBuilder
                 .fromUriString(baseUrl + "/games")
-                .queryParam("key", apiKey)
                 .queryParam("ordering", "-rating")
                 .queryParam("page", page + 1)
                 .queryParam("page_size", 20);
@@ -101,7 +96,6 @@ public class RawgApiClient {
 
         UriComponentsBuilder builder = UriComponentsBuilder
                 .fromUriString(baseUrl + "/games")
-                .queryParam("key", apiKey)
                 .queryParam("dates", today + "," + oneYearLater)
                 .queryParam("ordering", "-added")
                 .queryParam("page_size", 20);
@@ -122,7 +116,6 @@ public class RawgApiClient {
     public RawgListResponse fetchGenres() {
         String url = UriComponentsBuilder
                 .fromUriString(baseUrl + "/genres")
-                .queryParam("key", apiKey)
                 .build().toUriString();
         try {
             return restTemplate.getForObject(url, RawgListResponse.class);
@@ -134,7 +127,6 @@ public class RawgApiClient {
     public RawgListResponse fetchPlatforms() {
         String url = UriComponentsBuilder
                 .fromUriString(baseUrl + "/platforms/lists/parents")
-                .queryParam("key", apiKey)
                 .build().toUriString();
         try {
             return restTemplate.getForObject(url, RawgListResponse.class);

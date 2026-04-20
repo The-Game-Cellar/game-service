@@ -282,10 +282,10 @@ class GameServiceTest {
         rawgResponse.setCount(1);
         rawgResponse.setResults(List.of(rawgDto));
 
-        when(rawgApiClient.searchGames("witcher", null, null, 0, 20)).thenReturn(rawgResponse);
+        when(rawgApiClient.searchGames("witcher", null, null, "-rating", 0, 20)).thenReturn(rawgResponse);
         when(gameRepository.findByRawgId(3328)).thenReturn(Optional.of(cachedGame));
 
-        GameSearchResponse result = gameService.searchGames("witcher", null, null, 0, 20);
+        GameSearchResponse result = gameService.searchGames("witcher", null, null, "-rating", 0, 20);
 
         assertThat(result.getTotalCount()).isEqualTo(1);
         assertThat(result.getGames()).hasSize(1);
@@ -302,8 +302,9 @@ class GameServiceTest {
                     .build());
         }
         when(gameRepository.findByGenreName(eq("RPG"), any(Pageable.class))).thenReturn(cachedGames);
+        when(gameRepository.countByGenreName("RPG")).thenReturn(6L);
 
-        GameSearchResponse result = gameService.searchGames(null, null, "RPG", 1, 20);
+        GameSearchResponse result = gameService.searchGames(null, null, "RPG", "-rating", 0, 20);
 
         assertThat(result.getGames()).hasSize(6);
         assertThat(result.getTotalCount()).isEqualTo(6);
@@ -315,7 +316,7 @@ class GameServiceTest {
         when(gameRepository.findByGenreName(eq("RPG"), any(Pageable.class))).thenReturn(List.of());
         when(gameRepository.findRecentGames(any())).thenReturn(List.of(cachedGame));
 
-        GameSearchResponse result = gameService.searchGames(null, null, "RPG", 0, 20);
+        GameSearchResponse result = gameService.searchGames(null, null, "RPG", "-rating", 0, 20);
 
         assertThat(result.getGames()).hasSize(1);
         verifyNoInteractions(rawgApiClient);
@@ -329,12 +330,12 @@ class GameServiceTest {
 
         when(gameRepository.findByGenreName(eq("RPG"), any(Pageable.class))).thenReturn(List.of());
         when(gameRepository.findRecentGames(any())).thenReturn(List.of()); // broad pool also empty → fall through
-        when(rawgApiClient.searchGames(null, null, "RPG", 0, 20)).thenReturn(rawgResponse);
+        when(rawgApiClient.searchGames(null, null, "RPG", "-rating", 0, 20)).thenReturn(rawgResponse);
         when(gameRepository.findByRawgId(3328)).thenReturn(Optional.of(cachedGame));
 
-        GameSearchResponse result = gameService.searchGames(null, null, "RPG", 0, 20);
+        GameSearchResponse result = gameService.searchGames(null, null, "RPG", "-rating", 0, 20);
 
         assertThat(result.getGames()).hasSize(1);
-        verify(rawgApiClient).searchGames(null, null, "RPG", 0, 20);
+        verify(rawgApiClient).searchGames(null, null, "RPG", "-rating", 0, 20);
     }
 }
