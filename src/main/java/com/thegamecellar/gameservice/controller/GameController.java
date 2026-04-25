@@ -23,9 +23,9 @@ public class GameController {
 
     private final GameService gameService;
 
-    @GetMapping("/{rawgId}")
-    public ResponseEntity<GameResponse> getGameById(@PathVariable Integer rawgId) {
-        return ResponseEntity.ok(gameService.getGameById(rawgId));
+    @GetMapping("/{igdbId}")
+    public ResponseEntity<GameResponse> getGameById(@PathVariable Integer igdbId) {
+        return ResponseEntity.ok(gameService.getGameById(igdbId));
     }
 
     @GetMapping("/search")

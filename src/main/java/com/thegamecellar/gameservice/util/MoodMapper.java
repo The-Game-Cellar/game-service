@@ -5,6 +5,7 @@ import java.util.*;
 public class MoodMapper {
 
     private static final Map<String, List<String>> TAG_TO_MOODS = new HashMap<>();
+    private static final Map<String, List<String>> THEME_TO_MOODS = new HashMap<>();
     private static final Map<String, List<String>> GENRE_TO_MOODS = new HashMap<>();
 
     static {
@@ -14,6 +15,7 @@ public class MoodMapper {
         TAG_TO_MOODS.put("interactive fiction",   List.of("Story-driven"));
         TAG_TO_MOODS.put("visual novel",          List.of("Story-driven"));
         TAG_TO_MOODS.put("narrative",             List.of("Story-driven"));
+        TAG_TO_MOODS.put("lore rich",             List.of("Story-driven", "Epic"));
 
         // Atmospheric
         TAG_TO_MOODS.put("atmospheric",           List.of("Atmospheric"));
@@ -31,8 +33,8 @@ public class MoodMapper {
         TAG_TO_MOODS.put("difficult",             List.of("Intense"));
         TAG_TO_MOODS.put("gore",                  List.of("Intense", "Dark/Gritty"));
         TAG_TO_MOODS.put("violent",               List.of("Intense"));
-        TAG_TO_MOODS.put("fast-paced",            List.of("Intense", "Fast-paced"));
-        TAG_TO_MOODS.put("souls-like",            List.of("Intense", "Dark/Gritty"));
+        TAG_TO_MOODS.put("fast paced",            List.of("Intense", "Fast-paced"));
+        TAG_TO_MOODS.put("souls like",            List.of("Intense", "Dark/Gritty"));
         TAG_TO_MOODS.put("hack and slash",        List.of("Intense", "Fast-paced"));
         TAG_TO_MOODS.put("bullet hell",           List.of("Intense", "Fast-paced"));
 
@@ -58,8 +60,8 @@ public class MoodMapper {
 
         // Tactical
         TAG_TO_MOODS.put("stealth",               List.of("Tactical"));
-        TAG_TO_MOODS.put("turn-based",            List.of("Tactical"));
-        TAG_TO_MOODS.put("turn-based strategy",   List.of("Tactical"));
+        TAG_TO_MOODS.put("turn based",            List.of("Tactical"));
+        TAG_TO_MOODS.put("turn based strategy",   List.of("Tactical"));
         TAG_TO_MOODS.put("tactical",              List.of("Tactical"));
         TAG_TO_MOODS.put("real time tactics",     List.of("Tactical"));
 
@@ -71,10 +73,10 @@ public class MoodMapper {
         TAG_TO_MOODS.put("moddable",              List.of("Creative"));
 
         // Social
-        TAG_TO_MOODS.put("co-op",                 List.of("Social"));
+        TAG_TO_MOODS.put("co op",                 List.of("Social"));
         TAG_TO_MOODS.put("cooperative",           List.of("Social"));
-        TAG_TO_MOODS.put("local co-op",           List.of("Social"));
-        TAG_TO_MOODS.put("online co-op",          List.of("Social"));
+        TAG_TO_MOODS.put("local co op",           List.of("Social"));
+        TAG_TO_MOODS.put("online co op",          List.of("Social"));
         TAG_TO_MOODS.put("split screen",          List.of("Social"));
         TAG_TO_MOODS.put("party",                 List.of("Social"));
 
@@ -92,9 +94,8 @@ public class MoodMapper {
 
         // Epic
         TAG_TO_MOODS.put("fantasy",               List.of("Epic"));
-        TAG_TO_MOODS.put("sci-fi",                List.of("Epic"));
+        TAG_TO_MOODS.put("sci fi",                List.of("Epic"));
         TAG_TO_MOODS.put("grand strategy",        List.of("Epic", "Tactical"));
-        TAG_TO_MOODS.put("lore-rich",             List.of("Epic", "Story-driven"));
 
         // Emotional
         TAG_TO_MOODS.put("emotional",             List.of("Emotional"));
@@ -113,7 +114,7 @@ public class MoodMapper {
 
         // Survival
         TAG_TO_MOODS.put("survival",              List.of("Survival"));
-        TAG_TO_MOODS.put("post-apocalyptic",      List.of("Survival", "Dark/Gritty"));
+        TAG_TO_MOODS.put("post apocalyptic",      List.of("Survival", "Dark/Gritty"));
         TAG_TO_MOODS.put("roguelike",             List.of("Survival"));
         TAG_TO_MOODS.put("roguelite",             List.of("Survival"));
 
@@ -121,8 +122,8 @@ public class MoodMapper {
         TAG_TO_MOODS.put("pixel graphics",        List.of("Nostalgic"));
         TAG_TO_MOODS.put("retro",                 List.of("Nostalgic"));
         TAG_TO_MOODS.put("classic",               List.of("Nostalgic"));
-        TAG_TO_MOODS.put("8-bit",                 List.of("Nostalgic"));
-        TAG_TO_MOODS.put("16-bit",                List.of("Nostalgic"));
+        TAG_TO_MOODS.put("8 bit",                 List.of("Nostalgic"));
+        TAG_TO_MOODS.put("16 bit",                List.of("Nostalgic"));
 
         // Meditative
         TAG_TO_MOODS.put("minimalist",            List.of("Meditative"));
@@ -136,26 +137,64 @@ public class MoodMapper {
         TAG_TO_MOODS.put("mature",                List.of("Dark/Gritty"));
         TAG_TO_MOODS.put("noir",                  List.of("Dark/Gritty", "Mystery"));
 
-        // Genre fallbacks
-        GENRE_TO_MOODS.put("Action",                List.of("Intense", "Fast-paced"));
-        GENRE_TO_MOODS.put("RPG",                   List.of("Story-driven", "Exploration", "Epic"));
-        GENRE_TO_MOODS.put("Adventure",             List.of("Story-driven", "Exploration", "Atmospheric"));
-        GENRE_TO_MOODS.put("Shooter",               List.of("Intense", "Fast-paced", "Competitive"));
-        GENRE_TO_MOODS.put("Strategy",              List.of("Tactical", "Competitive"));
-        GENRE_TO_MOODS.put("Simulation",            List.of("Chill", "Cozy", "Creative"));
-        GENRE_TO_MOODS.put("Puzzle",                List.of("Chill", "Meditative"));
-        GENRE_TO_MOODS.put("Platformer",            List.of("Fast-paced", "Nostalgic"));
-        GENRE_TO_MOODS.put("Racing",                List.of("Fast-paced", "Competitive"));
-        GENRE_TO_MOODS.put("Sports",                List.of("Competitive", "Social"));
-        GENRE_TO_MOODS.put("Fighting",              List.of("Intense", "Competitive"));
-        GENRE_TO_MOODS.put("Indie",                 List.of("Atmospheric", "Creative"));
-        GENRE_TO_MOODS.put("Casual",                List.of("Chill", "Humorous"));
-        GENRE_TO_MOODS.put("Arcade",                List.of("Fast-paced", "Nostalgic"));
-        GENRE_TO_MOODS.put("Massively Multiplayer", List.of("Social", "Epic", "Competitive"));
-        GENRE_TO_MOODS.put("Family",                List.of("Cozy", "Humorous", "Social"));
-        GENRE_TO_MOODS.put("Board Games",           List.of("Chill", "Tactical", "Social"));
-        GENRE_TO_MOODS.put("Card",                  List.of("Tactical", "Chill"));
-        GENRE_TO_MOODS.put("Educational",           List.of("Meditative", "Creative"));
+        // IGDB curated themes
+        THEME_TO_MOODS.put("Action",              List.of("Intense", "Fast-paced"));
+        THEME_TO_MOODS.put("Fantasy",             List.of("Epic", "Atmospheric"));
+        THEME_TO_MOODS.put("Science fiction",     List.of("Epic", "Atmospheric"));
+        THEME_TO_MOODS.put("Horror",              List.of("Spooky", "Intense"));
+        THEME_TO_MOODS.put("Thriller",            List.of("Intense", "Atmospheric"));
+        THEME_TO_MOODS.put("Survival",            List.of("Survival", "Intense"));
+        THEME_TO_MOODS.put("Historical",          List.of("Epic", "Story-driven"));
+        THEME_TO_MOODS.put("Stealth",             List.of("Tactical"));
+        THEME_TO_MOODS.put("Comedy",              List.of("Humorous"));
+        THEME_TO_MOODS.put("Business",            List.of("Tactical", "Chill"));
+        THEME_TO_MOODS.put("Drama",               List.of("Emotional", "Story-driven"));
+        THEME_TO_MOODS.put("Non-fiction",         List.of("Meditative"));
+        THEME_TO_MOODS.put("Sandbox",             List.of("Creative", "Exploration"));
+        THEME_TO_MOODS.put("Educational",         List.of("Meditative", "Creative"));
+        THEME_TO_MOODS.put("Kids",                List.of("Cozy", "Humorous"));
+        THEME_TO_MOODS.put("Open world",          List.of("Exploration", "Epic"));
+        THEME_TO_MOODS.put("Warfare",             List.of("Intense", "Tactical"));
+        THEME_TO_MOODS.put("Party",               List.of("Social", "Humorous"));
+        THEME_TO_MOODS.put("Mystery",             List.of("Mystery"));
+        THEME_TO_MOODS.put("Romance",             List.of("Emotional", "Story-driven"));
+        THEME_TO_MOODS.put("4X (explore, expand, exploit, exterminate)", List.of("Tactical", "Epic"));
+
+        // Genre name → mood mapping
+        GENRE_TO_MOODS.put("Action",                         List.of("Intense", "Fast-paced"));
+        GENRE_TO_MOODS.put("RPG",                            List.of("Story-driven", "Exploration", "Epic"));
+        GENRE_TO_MOODS.put("Role-playing (RPG)",             List.of("Story-driven", "Exploration", "Epic"));
+        GENRE_TO_MOODS.put("Adventure",                      List.of("Story-driven", "Exploration", "Atmospheric"));
+        GENRE_TO_MOODS.put("Shooter",                        List.of("Intense", "Fast-paced", "Competitive"));
+        GENRE_TO_MOODS.put("Strategy",                       List.of("Tactical", "Competitive"));
+        GENRE_TO_MOODS.put("Real Time Strategy (RTS)",       List.of("Tactical", "Competitive"));
+        GENRE_TO_MOODS.put("Turn-based strategy (TBS)",      List.of("Tactical"));
+        GENRE_TO_MOODS.put("Tactical",                       List.of("Tactical"));
+        GENRE_TO_MOODS.put("Simulation",                     List.of("Chill", "Cozy", "Creative"));
+        GENRE_TO_MOODS.put("Simulator",                      List.of("Chill", "Cozy", "Creative"));
+        GENRE_TO_MOODS.put("Puzzle",                         List.of("Chill", "Meditative"));
+        GENRE_TO_MOODS.put("Platformer",                     List.of("Fast-paced", "Nostalgic"));
+        GENRE_TO_MOODS.put("Platform",                       List.of("Fast-paced", "Nostalgic"));
+        GENRE_TO_MOODS.put("Racing",                         List.of("Fast-paced", "Competitive"));
+        GENRE_TO_MOODS.put("Sports",                         List.of("Competitive", "Social"));
+        GENRE_TO_MOODS.put("Sport",                          List.of("Competitive", "Social"));
+        GENRE_TO_MOODS.put("Fighting",                       List.of("Intense", "Competitive"));
+        GENRE_TO_MOODS.put("Hack and slash/Beat 'em up",     List.of("Intense", "Fast-paced"));
+        GENRE_TO_MOODS.put("Indie",                          List.of("Atmospheric", "Creative"));
+        GENRE_TO_MOODS.put("Casual",                         List.of("Chill", "Humorous"));
+        GENRE_TO_MOODS.put("Arcade",                         List.of("Fast-paced", "Nostalgic"));
+        GENRE_TO_MOODS.put("Massively Multiplayer",          List.of("Social", "Epic", "Competitive"));
+        GENRE_TO_MOODS.put("MOBA",                           List.of("Competitive", "Social"));
+        GENRE_TO_MOODS.put("Family",                         List.of("Cozy", "Humorous", "Social"));
+        GENRE_TO_MOODS.put("Board Games",                    List.of("Chill", "Tactical", "Social"));
+        GENRE_TO_MOODS.put("Card & Board Game",              List.of("Chill", "Tactical", "Social"));
+        GENRE_TO_MOODS.put("Card",                           List.of("Tactical", "Chill"));
+        GENRE_TO_MOODS.put("Educational",                    List.of("Meditative", "Creative"));
+        GENRE_TO_MOODS.put("Music",                          List.of("Meditative", "Chill"));
+        GENRE_TO_MOODS.put("Visual Novel",                   List.of("Story-driven", "Atmospheric"));
+        GENRE_TO_MOODS.put("Point-and-click",                List.of("Story-driven", "Atmospheric"));
+        GENRE_TO_MOODS.put("Quiz/Trivia",                    List.of("Chill", "Social"));
+        GENRE_TO_MOODS.put("Pinball",                        List.of("Nostalgic", "Fast-paced"));
     }
 
     public static List<String> getTagsForMood(String mood) {
@@ -167,19 +206,28 @@ public class MoodMapper {
     }
 
     public static List<String> getAllMoods() {
-        return TAG_TO_MOODS.values().stream()
-                .flatMap(List::stream)
-                .distinct()
-                .sorted()
-                .toList();
+        Set<String> all = new LinkedHashSet<>();
+        TAG_TO_MOODS.values().forEach(all::addAll);
+        THEME_TO_MOODS.values().forEach(all::addAll);
+        return all.stream().sorted().toList();
     }
 
-    public static List<String> getMoods(List<String> tags, List<String> genres) {
+    public static List<String> getMoods(List<String> tags, List<String> genres, List<String> themes) {
         Set<String> moods = new LinkedHashSet<>();
 
         if (tags != null) {
             for (String tag : tags) {
-                List<String> mapped = TAG_TO_MOODS.get(tag.toLowerCase());
+                // Normalize hyphens so IGDB keywords like "story-rich" match "story rich"
+                List<String> mapped = TAG_TO_MOODS.get(tag.toLowerCase().replace("-", " "));
+                if (mapped != null) {
+                    moods.addAll(mapped);
+                }
+            }
+        }
+
+        if (themes != null) {
+            for (String theme : themes) {
+                List<String> mapped = THEME_TO_MOODS.get(theme);
                 if (mapped != null) {
                     moods.addAll(mapped);
                 }

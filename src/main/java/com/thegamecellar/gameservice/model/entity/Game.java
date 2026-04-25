@@ -21,8 +21,8 @@ public class Game {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "rawg_id", unique = true, nullable = false)
-    private Integer rawgId;
+    @Column(name = "igdb_id", unique = true, nullable = false)
+    private Integer igdbId;
 
     @Column(name = "name", nullable = false)
     private String name;
@@ -36,6 +36,9 @@ public class Game {
     @Column(name = "background_image", length = 500)
     private String backgroundImage;
 
+    @Column(name = "cover_image_id", length = 255)
+    private String coverImageId;
+
     @Column(name = "released", length = 20)
     private String released;
 
@@ -48,6 +51,9 @@ public class Game {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "enriched_at")
+    private LocalDateTime enrichedAt;
+
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @Builder.Default
     private List<GameGenre> genres = new ArrayList<>();
@@ -59,6 +65,10 @@ public class Game {
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @Builder.Default
     private List<GameTag> tags = new ArrayList<>();
+
+    @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @Builder.Default
+    private List<GameTheme> themes = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {
