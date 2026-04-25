@@ -52,4 +52,5 @@ application-local.properties
 
 ### Claude Code ###
 CLAUDE.md
+AGENTS.md
 .claude/

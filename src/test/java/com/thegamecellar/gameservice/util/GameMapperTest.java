@@ -1,13 +1,10 @@
 package com.thegamecellar.gameservice.util;
 
 import com.thegamecellar.gameservice.model.dto.GameResponse;
-import com.thegamecellar.gameservice.model.dto.rawg.RawgGameDto;
-import com.thegamecellar.gameservice.model.dto.rawg.RawgNamedEntity;
-import com.thegamecellar.gameservice.model.dto.rawg.RawgPlatformEntry;
-import com.thegamecellar.gameservice.model.entity.Game;
-import com.thegamecellar.gameservice.model.entity.GameGenre;
-import com.thegamecellar.gameservice.model.entity.GamePlatform;
-import com.thegamecellar.gameservice.model.entity.GameTag;
+import com.thegamecellar.gameservice.model.dto.igdb.IgdbCoverDto;
+import com.thegamecellar.gameservice.model.dto.igdb.IgdbGameDto;
+import com.thegamecellar.gameservice.model.dto.igdb.IgdbNamedEntityDto;
+import com.thegamecellar.gameservice.model.entity.*;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -16,104 +13,84 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class
-GameMapperTest {
+class GameMapperTest {
+
+    // ── IGDB → entity ────────────────────────────────────────────────────────
 
     @Test
-    void shouldMapRawgDtoToEntity() {
-        RawgGameDto dto = buildDto();
+    void shouldMapIgdbDtoToEntity() {
+        IgdbGameDto dto = buildIgdbDto();
 
         Game entity = GameMapper.toEntity(dto);
 
-        assertThat(entity.getRawgId()).isEqualTo(3328);
+        assertThat(entity.getIgdbId()).isEqualTo(1942);
         assertThat(entity.getName()).isEqualTo("The Witcher 3: Wild Hunt");
-        assertThat(entity.getRating()).isEqualByComparingTo(new BigDecimal("4.66"));
+        assertThat(entity.getDescription()).isEqualTo("A story-driven RPG.");
+        assertThat(entity.getRating()).isEqualByComparingTo(new BigDecimal("4.70"));
+        assertThat(entity.getCoverImageId()).isEqualTo("abc123");
+        assertThat(entity.getReleased()).isNotNull();
     }
 
     @Test
-    void shouldJoinMultipleDevelopersWithComma() {
-        RawgGameDto dto = new RawgGameDto();
+    void shouldHandleNullRatingInIgdbDto() {
+        IgdbGameDto dto = new IgdbGameDto();
         dto.setId(1);
         dto.setName("Game");
 
-        RawgNamedEntity dev1 = new RawgNamedEntity();
-        dev1.setName("Studio A");
-        RawgNamedEntity dev2 = new RawgNamedEntity();
-        dev2.setName("Studio B");
-        dto.setDevelopers(List.of(dev1, dev2));
-
         Game entity = GameMapper.toEntity(dto);
 
-        assertThat(entity.getDevelopers()).isEqualTo("Studio A,Studio B");
+        assertThat(entity.getRating()).isNull();
+        assertThat(entity.getCoverImageId()).isNull();
+        assertThat(entity.getReleased()).isNull();
     }
 
     @Test
-    void shouldHandleNullDevelopers() {
-        RawgGameDto dto = new RawgGameDto();
-        dto.setId(1);
-        dto.setName("Game");
-        dto.setDevelopers(null);
-
-        Game entity = GameMapper.toEntity(dto);
-
-        assertThat(entity.getDevelopers()).isNull();
-    }
-
-    @Test
-    void shouldMapGenresToEntities() {
-        RawgGameDto dto = buildDto();
+    void shouldMapIgdbGenresToEntities() {
+        IgdbGameDto dto = buildIgdbDto();
         Game game = new Game();
 
         List<GameGenre> genres = GameMapper.toGenreEntities(dto, game);
 
         assertThat(genres).hasSize(1);
-        assertThat(genres.get(0).getGenreName()).isEqualTo("RPG");
+        assertThat(genres.get(0).getGenreName()).isEqualTo("Role-playing (RPG)");
         assertThat(genres.get(0).getGame()).isSameAs(game);
     }
 
     @Test
-    void shouldReturnEmptyListForNullGenres() {
-        RawgGameDto dto = new RawgGameDto();
-        dto.setGenres(null);
-
-        List<GameGenre> genres = GameMapper.toGenreEntities(dto, new Game());
-
-        assertThat(genres).isEmpty();
-    }
-
-    @Test
-    void shouldMapTagsToEntities() {
-        RawgGameDto dto = buildDto();
+    void shouldMapIgdbKeywordsToTagEntities() {
+        IgdbGameDto dto = buildIgdbDto();
         Game game = new Game();
 
         List<GameTag> tags = GameMapper.toTagEntities(dto, game);
 
         assertThat(tags).hasSize(1);
-        assertThat(tags.get(0).getTagName()).isEqualTo("Story Rich");
+        assertThat(tags.get(0).getTagName()).isEqualTo("story rich");
         assertThat(tags.get(0).getGame()).isSameAs(game);
     }
 
     @Test
-    void shouldReturnEmptyListForNullTags() {
-        RawgGameDto dto = new RawgGameDto();
-        dto.setTags(null);
+    void shouldMapIgdbThemesToEntities() {
+        IgdbGameDto dto = buildIgdbDto();
+        Game game = new Game();
 
-        List<GameTag> tags = GameMapper.toTagEntities(dto, new Game());
+        List<GameTheme> themes = GameMapper.toThemeEntities(dto, game);
 
-        assertThat(tags).isEmpty();
+        assertThat(themes).hasSize(1);
+        assertThat(themes.get(0).getThemeName()).isEqualTo("Fantasy");
+        assertThat(themes.get(0).getGame()).isSameAs(game);
     }
 
     @Test
-    void shouldSkipPlatformEntriesWithNullPlatform() {
-        RawgGameDto dto = new RawgGameDto();
-        RawgPlatformEntry entry = new RawgPlatformEntry();
-        entry.setPlatform(null);
-        dto.setPlatforms(List.of(entry));
+    void shouldReturnEmptyListForNullIgdbCollections() {
+        IgdbGameDto dto = new IgdbGameDto();
 
-        List<GamePlatform> platforms = GameMapper.toPlatformEntities(dto, new Game());
-
-        assertThat(platforms).isEmpty();
+        assertThat(GameMapper.toGenreEntities(dto, new Game())).isEmpty();
+        assertThat(GameMapper.toTagEntities(dto, new Game())).isEmpty();
+        assertThat(GameMapper.toThemeEntities(dto, new Game())).isEmpty();
+        assertThat(GameMapper.toPlatformEntities(dto, new Game())).isEmpty();
     }
+
+    // ── entity → response ────────────────────────────────────────────────────
 
     @Test
     void shouldMapEntityToResponse() {
@@ -126,36 +103,44 @@ GameMapperTest {
         GamePlatform platform = new GamePlatform();
         platform.setPlatformName("PC");
 
+        GameTheme theme = new GameTheme();
+        theme.setThemeName("Fantasy");
+
         Game game = Game.builder()
-                .rawgId(3328)
+                .igdbId(1942)
                 .name("The Witcher 3: Wild Hunt")
                 .rating(new BigDecimal("4.66"))
+                .coverImageId("abc123")
                 .developers("CD PROJEKT RED")
                 .tags(new ArrayList<>(List.of(tag)))
                 .genres(new ArrayList<>(List.of(genre)))
                 .platforms(new ArrayList<>(List.of(platform)))
+                .themes(new ArrayList<>(List.of(theme)))
                 .build();
 
         GameResponse response = GameMapper.toResponse(game);
 
-        assertThat(response.getRawgId()).isEqualTo(3328);
+        assertThat(response.getIgdbId()).isEqualTo(1942);
         assertThat(response.getName()).isEqualTo("The Witcher 3: Wild Hunt");
         assertThat(response.getGenres()).containsExactly("RPG");
         assertThat(response.getPlatforms()).containsExactly("PC");
         assertThat(response.getTags()).containsExactly("Story Rich");
+        assertThat(response.getThemes()).containsExactly("Fantasy");
         assertThat(response.getDevelopers()).containsExactly("CD PROJEKT RED");
+        assertThat(response.getCoverImageUrl()).contains("abc123");
         assertThat(response.getMoods()).contains("Story-driven");
     }
 
     @Test
     void shouldReturnEmptyDevelopersListWhenDevelopersIsNull() {
         Game game = Game.builder()
-                .rawgId(1)
+                .igdbId(1)
                 .name("Game")
                 .developers(null)
                 .genres(new ArrayList<>())
                 .platforms(new ArrayList<>())
                 .tags(new ArrayList<>())
+                .themes(new ArrayList<>())
                 .build();
 
         GameResponse response = GameMapper.toResponse(game);
@@ -164,52 +149,72 @@ GameMapperTest {
     }
 
     @Test
-    void shouldMapRawgDtoDirectlyToResponse() {
-        RawgGameDto dto = buildDto();
+    void shouldMapIgdbDtoDirectlyToResponse() {
+        IgdbGameDto dto = buildIgdbDto();
 
-        GameResponse response = GameMapper.toResponseFromRawg(dto);
+        GameResponse response = GameMapper.toResponseFromIgdb(dto);
 
-        assertThat(response.getRawgId()).isEqualTo(3328);
+        assertThat(response.getIgdbId()).isEqualTo(1942);
         assertThat(response.getName()).isEqualTo("The Witcher 3: Wild Hunt");
-        assertThat(response.getGenres()).containsExactly("RPG");
-        assertThat(response.getTags()).containsExactly("Story Rich");
-        assertThat(response.getMoods()).contains("Story-driven");
+        assertThat(response.getGenres()).containsExactly("Role-playing (RPG)");
+        assertThat(response.getTags()).containsExactly("story rich");
+        assertThat(response.getThemes()).containsExactly("Fantasy");
+        assertThat(response.getCoverImageUrl()).contains("abc123");
     }
 
     @Test
-    void shouldHandleNullFieldsInRawgDtoResponse() {
-        RawgGameDto dto = new RawgGameDto();
+    void shouldHandleNullFieldsInIgdbDtoResponse() {
+        IgdbGameDto dto = new IgdbGameDto();
         dto.setId(1);
         dto.setName("Minimal Game");
 
-        GameResponse response = GameMapper.toResponseFromRawg(dto);
+        GameResponse response = GameMapper.toResponseFromIgdb(dto);
 
         assertThat(response.getGenres()).isEmpty();
         assertThat(response.getPlatforms()).isEmpty();
         assertThat(response.getTags()).isEmpty();
+        assertThat(response.getThemes()).isEmpty();
         assertThat(response.getDevelopers()).isEmpty();
         assertThat(response.getMoods()).isEmpty();
+        assertThat(response.getCoverImageUrl()).isNull();
     }
 
-    private RawgGameDto buildDto() {
-        RawgNamedEntity genre = new RawgNamedEntity();
-        genre.setName("RPG");
+    // ── helpers ───────────────────────────────────────────────────────────────
 
-        RawgNamedEntity tag = new RawgNamedEntity();
-        tag.setName("Story Rich");
+    private IgdbGameDto buildIgdbDto() {
+        IgdbNamedEntityDto genre = new IgdbNamedEntityDto();
+        genre.setId(12);
+        genre.setName("Role-playing (RPG)");
 
-        RawgNamedEntity dev = new RawgNamedEntity();
-        dev.setName("CD PROJEKT RED");
+        IgdbNamedEntityDto keyword = new IgdbNamedEntityDto();
+        keyword.setId(10);
+        keyword.setName("story rich");
 
-        RawgGameDto dto = new RawgGameDto();
-        dto.setId(3328);
+        IgdbNamedEntityDto theme = new IgdbNamedEntityDto();
+        theme.setId(17);
+        theme.setName("Fantasy");
+
+        IgdbNamedEntityDto platform = new IgdbNamedEntityDto();
+        platform.setId(6);
+        platform.setName("PC (Microsoft Windows)");
+
+        IgdbCoverDto cover = new IgdbCoverDto();
+        cover.setId(1);
+        cover.setImageId("abc123");
+
+        IgdbGameDto dto = new IgdbGameDto();
+        dto.setId(1942);
         dto.setName("The Witcher 3: Wild Hunt");
-        dto.setRating(new BigDecimal("4.66"));
+        dto.setSummary("A story-driven RPG.");
+        dto.setAggregatedRating(94.0);
+        dto.setFirstReleaseDate(1431993600L);
+        dto.setCover(cover);
         dto.setGenres(List.of(genre));
-        dto.setTags(List.of(tag));
-        dto.setDevelopers(List.of(dev));
-        dto.setPlatforms(List.of());
+        dto.setKeywords(List.of(keyword));
+        dto.setThemes(List.of(theme));
+        dto.setPlatforms(List.of(platform));
 
         return dto;
     }
+
 }

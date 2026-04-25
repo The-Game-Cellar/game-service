@@ -15,7 +15,16 @@ spring:
 server:
   port: ${GAME_SERVICE_PORT:8081}
 
-rawg:
+igdb:
+  client-id: ${TWITCH_CLIENT_ID}
+  client-secret: ${TWITCH_CLIENT_SECRET}
   api:
-    key: ${RAWG_API_KEY}
-    base-url: ${RAWG_API_BASE_URL:https://api.rawg.io/api}
+    base-url: ${IGDB_API_BASE_URL:https://api.igdb.com/v4}
+  worker:
+    enabled: ${IGDB_WORKER_ENABLED:true}
+    discovery-limit: ${IGDB_WORKER_DISCOVERY_LIMIT:500}
+    discovery-pages: ${IGDB_WORKER_DISCOVERY_PAGES:100}
+    new-releases-pages: ${IGDB_WORKER_NEW_RELEASES_PAGES:10}
+    enrichment-limit: ${IGDB_WORKER_ENRICHMENT_LIMIT:400}
+    cron: ${IGDB_WORKER_CRON:0 30 3 * * *}
+    rate-limit-delay-ms: ${IGDB_WORKER_RATE_LIMIT_DELAY_MS:250}

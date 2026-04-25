@@ -10,7 +10,15 @@ spring:
     database-platform: org.hibernate.dialect.H2Dialect
     show-sql: false
 
-rawg:
+igdb:
+  client-id: test-client-id
+  client-secret: test-client-secret
   api:
-    key: test-key
-    base-url: https://api.rawg.io/api
+    base-url: https://api.igdb.com/v4
+  worker:
+    enabled: false
+    discovery-limit: 500
+    discovery-pages: 3
+    new-releases-pages: 2
+    enrichment-limit: 10
+    cron: "0 0 3 * * *"

@@ -10,22 +10,37 @@ class MoodMapperTest {
 
     @Test
     void shouldMapTagToMood() {
-        List<String> moods = MoodMapper.getMoods(List.of("Story Rich"), List.of());
+        List<String> moods = MoodMapper.getMoods(List.of("Story Rich"), List.of(), List.of());
 
         assertThat(moods).contains("Story-driven");
     }
 
     @Test
     void shouldMapTagCaseInsensitively() {
-        List<String> moods = MoodMapper.getMoods(List.of("story rich"), List.of());
+        List<String> moods = MoodMapper.getMoods(List.of("story rich"), List.of(), List.of());
 
         assertThat(moods).contains("Story-driven");
     }
 
     @Test
+    void shouldMapHyphenatedIgdbKeyword() {
+        // IGDB keywords may use hyphens: "story-rich" should match "story rich"
+        List<String> moods = MoodMapper.getMoods(List.of("story-rich"), List.of(), List.of());
+
+        assertThat(moods).contains("Story-driven");
+    }
+
+    @Test
+    void shouldMapHyphenatedSoulsLike() {
+        List<String> moods = MoodMapper.getMoods(List.of("souls-like"), List.of(), List.of());
+
+        assertThat(moods).contains("Intense", "Dark/Gritty");
+    }
+
+    @Test
     void shouldDeduplicateMoods() {
         // Both "open world" and "exploration" map to "Exploration"
-        List<String> moods = MoodMapper.getMoods(List.of("open world", "exploration"), List.of());
+        List<String> moods = MoodMapper.getMoods(List.of("open world", "exploration"), List.of(), List.of());
 
         long count = moods.stream().filter("Exploration"::equals).count();
         assertThat(count).isEqualTo(1);
@@ -34,14 +49,21 @@ class MoodMapperTest {
     @Test
     void shouldReturnMultipleMoodsForOneTag() {
         // "open world" maps to both "Exploration" and "Epic"
-        List<String> moods = MoodMapper.getMoods(List.of("open world"), List.of());
+        List<String> moods = MoodMapper.getMoods(List.of("open world"), List.of(), List.of());
 
         assertThat(moods).contains("Exploration", "Epic");
     }
 
     @Test
-    void shouldFallBackToGenreIfNoTagMoodsFound() {
-        List<String> moods = MoodMapper.getMoods(List.of("unknowntag"), List.of("RPG"));
+    void shouldFallBackToGenreIfNoTagOrThemeMoodsFound() {
+        List<String> moods = MoodMapper.getMoods(List.of("unknowntag"), List.of("RPG"), List.of());
+
+        assertThat(moods).contains("Story-driven", "Exploration", "Epic");
+    }
+
+    @Test
+    void shouldFallBackToIgdbGenreName() {
+        List<String> moods = MoodMapper.getMoods(List.of("unknowntag"), List.of("Role-playing (RPG)"), List.of());
 
         assertThat(moods).contains("Story-driven", "Exploration", "Epic");
     }
@@ -49,36 +71,65 @@ class MoodMapperTest {
     @Test
     void shouldNotFallBackToGenreIfTagMoodsWereFound() {
         // "relaxing" maps to "Chill" — genre fallback should NOT be used
-        List<String> moods = MoodMapper.getMoods(List.of("relaxing"), List.of("Action"));
+        List<String> moods = MoodMapper.getMoods(List.of("relaxing"), List.of("Action"), List.of());
 
         assertThat(moods).doesNotContain("Intense", "Fast-paced"); // Action moods
         assertThat(moods).contains("Chill");
     }
 
     @Test
+    void shouldNotFallBackToGenreIfThemeMoodsWereFound() {
+        List<String> moods = MoodMapper.getMoods(List.of("unknowntag"), List.of("Simulation"), List.of("Fantasy"));
+
+        assertThat(moods).doesNotContain("Chill", "Cozy", "Creative"); // Simulation genre moods
+        assertThat(moods).contains("Epic", "Atmospheric");
+    }
+
+    @Test
+    void shouldMapIgdbThemeToMood() {
+        List<String> moods = MoodMapper.getMoods(List.of(), List.of(), List.of("Horror"));
+
+        assertThat(moods).contains("Spooky", "Intense");
+    }
+
+    @Test
+    void shouldMapMultipleThemes() {
+        List<String> moods = MoodMapper.getMoods(List.of(), List.of(), List.of("Fantasy", "Survival"));
+
+        assertThat(moods).contains("Epic", "Atmospheric", "Survival", "Intense");
+    }
+
+    @Test
+    void shouldCombineTagAndThemeMoods() {
+        List<String> moods = MoodMapper.getMoods(List.of("relaxing"), List.of(), List.of("Mystery"));
+
+        assertThat(moods).contains("Chill", "Mystery");
+    }
+
+    @Test
     void shouldReturnEmptyListIfNoTagsOrGenresMatch() {
-        List<String> moods = MoodMapper.getMoods(List.of("unknowntag"), List.of("UnknownGenre"));
+        List<String> moods = MoodMapper.getMoods(List.of("unknowntag"), List.of("UnknownGenre"), List.of());
 
         assertThat(moods).isEmpty();
     }
 
     @Test
     void shouldHandleNullTagsGracefully() {
-        List<String> moods = MoodMapper.getMoods(null, List.of("RPG"));
+        List<String> moods = MoodMapper.getMoods(null, List.of("RPG"), null);
 
         assertThat(moods).contains("Story-driven");
     }
 
     @Test
     void shouldHandleNullGenresGracefully() {
-        List<String> moods = MoodMapper.getMoods(List.of("relaxing"), null);
+        List<String> moods = MoodMapper.getMoods(List.of("relaxing"), null, null);
 
         assertThat(moods).contains("Chill");
     }
 
     @Test
-    void shouldHandleBothNullGracefully() {
-        List<String> moods = MoodMapper.getMoods(null, null);
+    void shouldHandleAllNullGracefully() {
+        List<String> moods = MoodMapper.getMoods(null, null, null);
 
         assertThat(moods).isEmpty();
     }
@@ -116,7 +167,7 @@ class MoodMapperTest {
         List<String> moods = MoodMapper.getAllMoods();
 
         assertThat(moods).isNotEmpty();
-        assertThat(moods).contains("Chill", "Intense", "Story-driven", "Cozy", "Epic");
+        assertThat(moods).contains("Chill", "Intense", "Story-driven", "Cozy", "Epic", "Spooky", "Mystery");
         assertThat(moods).isSorted();
     }
 
@@ -126,5 +177,13 @@ class MoodMapperTest {
 
         long distinctCount = moods.stream().distinct().count();
         assertThat(moods).hasSize((int) distinctCount);
+    }
+
+    @Test
+    void shouldIncludeThemeMoodsInGetAllMoods() {
+        List<String> moods = MoodMapper.getAllMoods();
+
+        // Theme-exclusive moods that may not appear in TAG_TO_MOODS
+        assertThat(moods).contains("Spooky");
     }
 }

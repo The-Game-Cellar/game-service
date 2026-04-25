@@ -1,0 +1,137 @@
+package com.thegamecellar.gameservice.service;
+
+import com.thegamecellar.gameservice.model.entity.SyncState;
+import com.thegamecellar.gameservice.repository.SyncStateRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.util.Optional;
+
+import static com.thegamecellar.gameservice.service.IgdbCatalogWorker.IGDB_DISCOVERY_OFFSET_KEY;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class IgdbCatalogWorkerTest {
+
+    @Mock
+    private GameService gameService;
+
+    @Mock
+    private SyncStateRepository syncStateRepository;
+
+    @InjectMocks
+    private IgdbCatalogWorker worker;
+
+    @BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(worker, "enabled", true);
+        ReflectionTestUtils.setField(worker, "discoveryLimit", 500);
+        ReflectionTestUtils.setField(worker, "discoveryPages", 3);
+        ReflectionTestUtils.setField(worker, "newReleasesPages", 2);
+        ReflectionTestUtils.setField(worker, "enrichmentLimit", 10);
+        ReflectionTestUtils.setField(worker, "rateLimitDelayMs", 0L);
+    }
+
+    @Test
+    void shouldSkipAllPhasesWhenDisabled() {
+        ReflectionTestUtils.setField(worker, "enabled", false);
+
+        worker.syncCatalog();
+
+        verifyNoInteractions(gameService, syncStateRepository);
+    }
+
+    @Test
+    void shouldRunAllThreePhasesInOrder() {
+        when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY)).thenReturn(Optional.empty());
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(5);
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(2);
+        when(gameService.enrichNextBatchFromIgdb(anyInt())).thenReturn(8);
+
+        worker.syncCatalog();
+
+        verify(gameService, times(3)).syncIgdbCatalogOffset(anyInt(), eq(500));
+        verify(gameService, times(2)).syncIgdbNewReleasesOffset(anyInt(), eq(500));
+        verify(gameService).enrichNextBatchFromIgdb(10);
+    }
+
+    @Test
+    void shouldContinueFromLastDiscoveryOffset() {
+        when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY))
+                .thenReturn(Optional.of(new SyncState(IGDB_DISCOVERY_OFFSET_KEY, "1000")));
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(5);
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(0);
+        when(gameService.enrichNextBatchFromIgdb(anyInt())).thenReturn(0);
+
+        worker.syncCatalog();
+
+        verify(gameService).syncIgdbCatalogOffset(1000, 500);
+        verify(gameService).syncIgdbCatalogOffset(1500, 500);
+        verify(gameService).syncIgdbCatalogOffset(2000, 500);
+    }
+
+    @Test
+    void shouldExitDiscoveryEarlyAndRedirectBudgetToEnrichment() {
+        when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY)).thenReturn(Optional.empty());
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(0);
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(0);
+        when(gameService.enrichNextBatchFromIgdb(anyInt())).thenReturn(0);
+
+        worker.syncCatalog();
+
+        // All 3 pages tried, then early exit with 0 remaining (all pages consumed)
+        verify(gameService, times(3)).syncIgdbCatalogOffset(anyInt(), anyInt());
+        verify(gameService).enrichNextBatchFromIgdb(10);
+    }
+
+    @Test
+    void shouldResetOffsetToZeroAfterEarlyExit() {
+        when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY))
+                .thenReturn(Optional.of(new SyncState(IGDB_DISCOVERY_OFFSET_KEY, "50000")));
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(0);
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(0);
+        when(gameService.enrichNextBatchFromIgdb(anyInt())).thenReturn(0);
+
+        worker.syncCatalog();
+
+        ArgumentCaptor<SyncState> captor = ArgumentCaptor.forClass(SyncState.class);
+        verify(syncStateRepository).save(captor.capture());
+        assertThat(captor.getValue().getStateValue()).isEqualTo("0");
+    }
+
+    @Test
+    void shouldSaveNextOffsetAfterNormalCompletion() {
+        when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY))
+                .thenReturn(Optional.of(new SyncState(IGDB_DISCOVERY_OFFSET_KEY, "1000")));
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(5);
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(0);
+        when(gameService.enrichNextBatchFromIgdb(anyInt())).thenReturn(0);
+
+        worker.syncCatalog();
+
+        // 3 pages × 500 = 1500 offset advanced, starting at 1000 → saves 2500
+        ArgumentCaptor<SyncState> captor = ArgumentCaptor.forClass(SyncState.class);
+        verify(syncStateRepository).save(captor.capture());
+        assertThat(captor.getValue().getStateValue()).isEqualTo("2500");
+    }
+
+    @Test
+    void shouldContinueRemainingPhasesWhenDiscoveryFails() {
+        when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY)).thenReturn(Optional.empty());
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenThrow(new RuntimeException("IGDB down"));
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(0);
+        when(gameService.enrichNextBatchFromIgdb(anyInt())).thenReturn(0);
+
+        worker.syncCatalog();
+
+        verify(gameService).enrichNextBatchFromIgdb(anyInt());
+    }
+}
