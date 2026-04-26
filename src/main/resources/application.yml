@@ -1,6 +1,11 @@
 spring:
   application:
     name: game-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8080/realms/game-cellar}
   datasource:
     url: ${GAME_DB_URL}
     username: ${GAME_DB_USERNAME}
@@ -8,7 +13,7 @@ spring:
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     open-in-view: false
 
