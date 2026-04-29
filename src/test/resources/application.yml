@@ -25,5 +25,4 @@ igdb:
     discovery-limit: 500
     discovery-pages: 3
     new-releases-pages: 2
-    enrichment-limit: 10
     cron: "0 0 3 * * *"

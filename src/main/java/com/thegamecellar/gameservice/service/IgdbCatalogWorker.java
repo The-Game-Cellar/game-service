@@ -31,19 +31,14 @@ public class IgdbCatalogWorker {
     @Value("${igdb.worker.new-releases-pages:10}")
     private int newReleasesPages;
 
-    @Value("${igdb.worker.enrichment-limit:400}")
-    private int enrichmentLimit;
-
     @Value("${igdb.worker.rate-limit-delay-ms:250}")
     private long rateLimitDelayMs;
 
     public void quickSync() {
         log.info("IGDB quick sync started");
         try {
-            int newGames = gameService.syncIgdbCatalogOffset(0, 100);
-            log.info("Quick sync discovery: {} new games", newGames);
-            int enriched = gameService.enrichNextBatchFromIgdb(50);
-            log.info("Quick sync enrichment: {} games enriched", enriched);
+            CatalogSyncResult result = gameService.syncIgdbCatalogOffset(0, 100);
+            log.info("Quick sync discovery: {} new games (fetched {})", result.cached(), result.fetched());
         } catch (Exception e) {
             log.error("Quick sync failed: {}", e.getMessage());
         }
@@ -59,33 +54,27 @@ public class IgdbCatalogWorker {
         log.info("IGDB catalog sync started");
 
         int startOffset = getLastDiscoveryOffset();
-        int extraEnrichmentBudget = runMainDiscovery(startOffset);
+        runMainDiscovery(startOffset);
 
         runNewReleasesDiscovery();
 
-        int totalEnrichmentLimit = enrichmentLimit + extraEnrichmentBudget;
-        int enriched = gameService.enrichNextBatchFromIgdb(totalEnrichmentLimit);
-
-        log.info("IGDB catalog sync complete — enriched {} games", enriched);
+        log.info("IGDB catalog sync complete");
     }
 
-    private int runMainDiscovery(int startOffset) {
+    private void runMainDiscovery(int startOffset) {
         int newGamesTotal = 0;
         int consecutiveEmpty = 0;
-        int extraBudget = 0;
         int offset = startOffset;
         boolean earlyExit = false;
 
         for (int i = 0; i < discoveryPages; i++, offset += discoveryLimit) {
             try {
-                int newGames = gameService.syncIgdbCatalogOffset(offset, discoveryLimit);
-                newGamesTotal += newGames;
-                if (newGames == 0) {
+                CatalogSyncResult result = gameService.syncIgdbCatalogOffset(offset, discoveryLimit);
+                newGamesTotal += result.cached();
+                if (result.fetched() == 0) {
                     if (++consecutiveEmpty >= EARLY_EXIT_THRESHOLD) {
-                        int remaining = discoveryPages - i - 1;
-                        extraBudget += remaining;
                         earlyExit = true;
-                        log.warn("Discovery early exit after {} consecutive empty responses — {} budget redirected to enrichment", EARLY_EXIT_THRESHOLD, remaining);
+                        log.warn("Discovery early exit after {} consecutive empty IGDB responses", EARLY_EXIT_THRESHOLD);
                         break;
                     }
                 } else {
@@ -97,11 +86,9 @@ public class IgdbCatalogWorker {
             }
         }
 
-        // Catalog exhausted → reset to 0 for next run; otherwise continue from current position
         int nextOffset = earlyExit ? 0 : offset;
         saveLastDiscoveryOffset(nextOffset);
         log.info("Main discovery complete — {} new games, next offset={}", newGamesTotal, nextOffset);
-        return extraBudget;
     }
 
     private void runNewReleasesDiscovery() {
@@ -109,7 +96,8 @@ public class IgdbCatalogWorker {
         int offset = 0;
         for (int i = 0; i < newReleasesPages; i++, offset += discoveryLimit) {
             try {
-                newGames += gameService.syncIgdbNewReleasesOffset(offset, discoveryLimit);
+                CatalogSyncResult result = gameService.syncIgdbNewReleasesOffset(offset, discoveryLimit);
+                newGames += result.cached();
                 rateLimitSleep();
             } catch (Exception e) {
                 log.error("New releases discovery failed at offset {}: {}", offset, e.getMessage());

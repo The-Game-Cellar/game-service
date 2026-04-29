@@ -36,7 +36,6 @@ class IgdbCatalogWorkerTest {
         ReflectionTestUtils.setField(worker, "discoveryLimit", 500);
         ReflectionTestUtils.setField(worker, "discoveryPages", 3);
         ReflectionTestUtils.setField(worker, "newReleasesPages", 2);
-        ReflectionTestUtils.setField(worker, "enrichmentLimit", 10);
         ReflectionTestUtils.setField(worker, "rateLimitDelayMs", 0L);
     }
 
@@ -50,26 +49,23 @@ class IgdbCatalogWorkerTest {
     }
 
     @Test
-    void shouldRunAllThreePhasesInOrder() {
+    void shouldRunBothPhasesInOrder() {
         when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY)).thenReturn(Optional.empty());
-        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(5);
-        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(2);
-        when(gameService.enrichNextBatchFromIgdb(anyInt())).thenReturn(8);
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(new CatalogSyncResult(500, 5));
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(new CatalogSyncResult(500, 2));
 
         worker.syncCatalog();
 
         verify(gameService, times(3)).syncIgdbCatalogOffset(anyInt(), eq(500));
         verify(gameService, times(2)).syncIgdbNewReleasesOffset(anyInt(), eq(500));
-        verify(gameService).enrichNextBatchFromIgdb(10);
     }
 
     @Test
     void shouldContinueFromLastDiscoveryOffset() {
         when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY))
                 .thenReturn(Optional.of(new SyncState(IGDB_DISCOVERY_OFFSET_KEY, "1000")));
-        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(5);
-        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(0);
-        when(gameService.enrichNextBatchFromIgdb(anyInt())).thenReturn(0);
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(new CatalogSyncResult(500, 5));
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(CatalogSyncResult.empty());
 
         worker.syncCatalog();
 
@@ -79,26 +75,37 @@ class IgdbCatalogWorkerTest {
     }
 
     @Test
-    void shouldExitDiscoveryEarlyAndRedirectBudgetToEnrichment() {
+    void shouldExitEarlyOnlyWhenIgdbReturnsEmpty_notWhenAllAlreadyCached() {
         when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY)).thenReturn(Optional.empty());
-        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(0);
-        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(0);
-        when(gameService.enrichNextBatchFromIgdb(anyInt())).thenReturn(0);
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(new CatalogSyncResult(500, 0));
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(CatalogSyncResult.empty());
 
         worker.syncCatalog();
 
-        // All 3 pages tried, then early exit with 0 remaining (all pages consumed)
+        // 3 pages run all the way through — fetched > 0 means catalog isn't exhausted
         verify(gameService, times(3)).syncIgdbCatalogOffset(anyInt(), anyInt());
-        verify(gameService).enrichNextBatchFromIgdb(10);
+        ArgumentCaptor<SyncState> captor = ArgumentCaptor.forClass(SyncState.class);
+        verify(syncStateRepository).save(captor.capture());
+        assertThat(captor.getValue().getStateValue()).isEqualTo("1500");
+    }
+
+    @Test
+    void shouldExitDiscoveryEarlyAfterConsecutiveEmptyIgdbResponses() {
+        when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY)).thenReturn(Optional.empty());
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(CatalogSyncResult.empty());
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(CatalogSyncResult.empty());
+
+        worker.syncCatalog();
+
+        verify(gameService, times(3)).syncIgdbCatalogOffset(anyInt(), anyInt());
     }
 
     @Test
     void shouldResetOffsetToZeroAfterEarlyExit() {
         when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY))
                 .thenReturn(Optional.of(new SyncState(IGDB_DISCOVERY_OFFSET_KEY, "50000")));
-        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(0);
-        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(0);
-        when(gameService.enrichNextBatchFromIgdb(anyInt())).thenReturn(0);
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(CatalogSyncResult.empty());
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(CatalogSyncResult.empty());
 
         worker.syncCatalog();
 
@@ -111,9 +118,8 @@ class IgdbCatalogWorkerTest {
     void shouldSaveNextOffsetAfterNormalCompletion() {
         when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY))
                 .thenReturn(Optional.of(new SyncState(IGDB_DISCOVERY_OFFSET_KEY, "1000")));
-        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(5);
-        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(0);
-        when(gameService.enrichNextBatchFromIgdb(anyInt())).thenReturn(0);
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(new CatalogSyncResult(500, 5));
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(CatalogSyncResult.empty());
 
         worker.syncCatalog();
 
@@ -127,11 +133,10 @@ class IgdbCatalogWorkerTest {
     void shouldContinueRemainingPhasesWhenDiscoveryFails() {
         when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY)).thenReturn(Optional.empty());
         when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenThrow(new RuntimeException("IGDB down"));
-        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(0);
-        when(gameService.enrichNextBatchFromIgdb(anyInt())).thenReturn(0);
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(CatalogSyncResult.empty());
 
         worker.syncCatalog();
 
-        verify(gameService).enrichNextBatchFromIgdb(anyInt());
+        verify(gameService, atLeastOnce()).syncIgdbNewReleasesOffset(anyInt(), anyInt());
     }
 }

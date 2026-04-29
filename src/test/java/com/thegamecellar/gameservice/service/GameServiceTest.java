@@ -7,11 +7,12 @@ import com.thegamecellar.gameservice.model.dto.GameSearchResponse;
 import com.thegamecellar.gameservice.model.dto.igdb.IgdbGameDto;
 import com.thegamecellar.gameservice.model.dto.igdb.IgdbNamedEntityDto;
 import com.thegamecellar.gameservice.model.entity.Game;
-import com.thegamecellar.gameservice.model.entity.GameGenre;
-import com.thegamecellar.gameservice.model.entity.GameTag;
-import com.thegamecellar.gameservice.repository.GameGenreRepository;
-import com.thegamecellar.gameservice.repository.GamePlatformRepository;
+import com.thegamecellar.gameservice.model.entity.Genre;
+import com.thegamecellar.gameservice.model.entity.Platform;
+import com.thegamecellar.gameservice.model.entity.Tag;
 import com.thegamecellar.gameservice.repository.GameRepository;
+import com.thegamecellar.gameservice.repository.GenreRepository;
+import com.thegamecellar.gameservice.repository.PlatformRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,12 +24,16 @@ import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -39,10 +44,13 @@ class GameServiceTest {
     private GameRepository gameRepository;
 
     @Mock
-    private GameGenreRepository gameGenreRepository;
+    private GenreRepository genreRepository;
 
     @Mock
-    private GamePlatformRepository gamePlatformRepository;
+    private PlatformRepository platformRepository;
+
+    @Mock
+    private GameCacheService gameCacheService;
 
     @Mock
     private IgdbApiClient igdbApiClient;
@@ -55,11 +63,8 @@ class GameServiceTest {
 
     @BeforeEach
     void setUp() {
-        GameTag tag = new GameTag();
-        tag.setTagName("Story Rich");
-
-        GameGenre genre = new GameGenre();
-        genre.setGenreName("RPG");
+        Tag tag = new Tag("Story Rich");
+        Genre genre = new Genre("RPG");
 
         cachedGame = Game.builder()
                 .id(1L)
@@ -67,10 +72,11 @@ class GameServiceTest {
                 .name("The Witcher 3: Wild Hunt")
                 .description("A story-driven open world RPG.")
                 .rating(new BigDecimal("4.66"))
-                .genres(new ArrayList<>(List.of(genre)))
-                .platforms(new ArrayList<>())
-                .tags(new ArrayList<>(List.of(tag)))
-                .themes(new ArrayList<>())
+                .genres(new HashSet<>(Set.of(genre)))
+                .platforms(new HashSet<>())
+                .tags(new HashSet<>(Set.of(tag)))
+                .themes(new HashSet<>())
+                .developers("CD Projekt Red")
                 .build();
 
         IgdbNamedEntityDto igdbTag = new IgdbNamedEntityDto();
@@ -105,7 +111,7 @@ class GameServiceTest {
     void shouldFetchFromIgdbIfNotCached() {
         when(gameRepository.findByIgdbId(1942)).thenReturn(Optional.empty());
         when(igdbApiClient.fetchGameById(1942)).thenReturn(igdbDto);
-        when(gameRepository.save(any(Game.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(gameCacheService.cacheGame(igdbDto)).thenReturn(cachedGame);
 
         GameResponse result = gameService.getGameById(1942);
 
@@ -114,16 +120,14 @@ class GameServiceTest {
     }
 
     @Test
-    void shouldSaveGameAfterFetch() {
+    void shouldDelegateSaveToGameCacheServiceAfterFetch() {
         when(gameRepository.findByIgdbId(1942)).thenReturn(Optional.empty());
         when(igdbApiClient.fetchGameById(1942)).thenReturn(igdbDto);
-        when(gameRepository.save(any(Game.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(gameCacheService.cacheGame(igdbDto)).thenReturn(cachedGame);
 
         gameService.getGameById(1942);
 
-        ArgumentCaptor<Game> captor = ArgumentCaptor.forClass(Game.class);
-        verify(gameRepository).save(captor.capture());
-        assertThat(captor.getValue().getIgdbId()).isEqualTo(1942);
+        verify(gameCacheService).cacheGame(igdbDto);
     }
 
     @Test
@@ -132,45 +136,44 @@ class GameServiceTest {
                 .id(1L)
                 .igdbId(1942)
                 .name("The Witcher 3: Wild Hunt")
-                .genres(new ArrayList<>())
-                .platforms(new ArrayList<>())
-                .tags(new ArrayList<>())
-                .themes(new ArrayList<>())
+                .genres(new HashSet<>())
+                .platforms(new HashSet<>())
+                .tags(new HashSet<>())
+                .themes(new HashSet<>())
                 .build();
 
         when(gameRepository.findByIgdbId(1942)).thenReturn(Optional.of(gameWithoutTags));
         when(igdbApiClient.fetchGameById(1942)).thenReturn(igdbDto);
-        when(gameRepository.save(any(Game.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(gameCacheService.refreshStaleGame(any(Game.class), any(IgdbGameDto.class))).thenReturn(cachedGame);
 
         gameService.getGameById(1942);
 
         verify(igdbApiClient).fetchGameById(1942);
-        verify(gameRepository).save(any(Game.class));
+        verify(gameCacheService).refreshStaleGame(any(Game.class), any(IgdbGameDto.class));
     }
 
     @Test
     void shouldRefetchFromIgdbIfCachedGameHasNoGenres() {
-        GameTag tag = new GameTag();
-        tag.setTagName("Story Rich");
+        Tag tag = new Tag("Story Rich");
 
         Game gameWithoutGenres = Game.builder()
                 .id(1L)
                 .igdbId(1942)
                 .name("The Witcher 3: Wild Hunt")
-                .genres(new ArrayList<>())
-                .platforms(new ArrayList<>())
-                .tags(new ArrayList<>(List.of(tag)))
-                .themes(new ArrayList<>())
+                .genres(new HashSet<>())
+                .platforms(new HashSet<>())
+                .tags(new HashSet<>(Set.of(tag)))
+                .themes(new HashSet<>())
                 .build();
 
         when(gameRepository.findByIgdbId(1942)).thenReturn(Optional.of(gameWithoutGenres));
         when(igdbApiClient.fetchGameById(1942)).thenReturn(igdbDto);
-        when(gameRepository.save(any(Game.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(gameCacheService.refreshStaleGame(any(Game.class), any(IgdbGameDto.class))).thenReturn(cachedGame);
 
         gameService.getGameById(1942);
 
         verify(igdbApiClient).fetchGameById(1942);
-        verify(gameRepository).save(any(Game.class));
+        verify(gameCacheService).refreshStaleGame(any(Game.class), any(IgdbGameDto.class));
     }
 
     @Test
@@ -229,10 +232,10 @@ class GameServiceTest {
                     .id((long) i)
                     .igdbId(i)
                     .name("Game " + i)
-                    .genres(new ArrayList<>())
-                    .platforms(new ArrayList<>())
-                    .tags(new ArrayList<>())
-                    .themes(new ArrayList<>())
+                    .genres(new HashSet<>())
+                    .platforms(new HashSet<>())
+                    .tags(new HashSet<>())
+                    .themes(new HashSet<>())
                     .build();
             games.add(g);
         }
@@ -247,7 +250,7 @@ class GameServiceTest {
 
     @Test
     void shouldReturnCachedGenresIfAvailable() {
-        when(gameGenreRepository.findAllDistinctGenreNames()).thenReturn(List.of("Action", "RPG"));
+        when(genreRepository.findAllNames()).thenReturn(List.of("Action", "RPG"));
 
         List<String> genres = gameService.getGenres();
 
@@ -261,7 +264,7 @@ class GameServiceTest {
         action.setId(1);
         action.setName("Action");
 
-        when(gameGenreRepository.findAllDistinctGenreNames()).thenReturn(List.of());
+        when(genreRepository.findAllNames()).thenReturn(List.of());
         when(igdbApiClient.fetchGenres()).thenReturn(List.of(action));
 
         List<String> genres = gameService.getGenres();
@@ -270,19 +273,21 @@ class GameServiceTest {
     }
 
     @Test
-    void shouldReturnCuratedPlatformList() {
+    void shouldReturnPlatformsFromDb_sortedAlphabetically() {
+        Platform pc = new Platform("PC");
+        Platform ps5 = new Platform("PlayStation 5");
+        Platform xbox = new Platform("Xbox One");
+        when(platformRepository.findAll()).thenReturn(List.of(ps5, xbox, pc));
+
         List<String> platforms = gameService.getPlatforms();
 
-        assertThat(platforms).containsExactly(
-                "PC", "PlayStation 5", "PlayStation 4", "Xbox Series S/X", "Xbox One", "Nintendo Switch");
+        assertThat(platforms).containsExactly("PC", "PlayStation 5", "Xbox One");
         verifyNoInteractions(igdbApiClient);
-        verifyNoInteractions(gamePlatformRepository);
     }
 
     @Test
     void shouldReturnSearchResultsFromIgdb() {
         when(igdbApiClient.searchGames("witcher", 20, 0)).thenReturn(List.of(igdbDto));
-        when(gameRepository.findByIgdbId(1942)).thenReturn(Optional.of(cachedGame));
 
         GameSearchResponse result = gameService.searchGames("witcher", null, null, "-rating", 0, 20);
 
@@ -296,8 +301,8 @@ class GameServiceTest {
         for (int i = 0; i < 6; i++) {
             cachedGames.add(Game.builder()
                     .id((long) i).igdbId(i).name("RPG Game " + i)
-                    .genres(new ArrayList<>()).platforms(new ArrayList<>())
-                    .tags(new ArrayList<>()).themes(new ArrayList<>())
+                    .genres(new HashSet<>()).platforms(new HashSet<>())
+                    .tags(new HashSet<>()).themes(new HashSet<>())
                     .build());
         }
         when(gameRepository.findByGenreName(eq("RPG"), any(Pageable.class))).thenReturn(cachedGames);
@@ -313,7 +318,9 @@ class GameServiceTest {
     @Test
     void shouldServeBroadPoolWhenGenreCacheEmptyButDbHasGames() {
         when(gameRepository.findByGenreName(eq("RPG"), any(Pageable.class))).thenReturn(List.of());
-        when(gameRepository.findRecentGames(any())).thenReturn(List.of(cachedGame));
+        when(gameRepository.count()).thenReturn(1L);
+        when(gameRepository.findAll(any(Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(cachedGame)));
 
         GameSearchResponse result = gameService.searchGames(null, null, "RPG", "-rating", 0, 20);
 
@@ -324,9 +331,8 @@ class GameServiceTest {
     @Test
     void shouldFallThroughToIgdbWhenGenreCacheEmptyAndDbEmpty() {
         when(gameRepository.findByGenreName(eq("RPG"), any(Pageable.class))).thenReturn(List.of());
-        when(gameRepository.findRecentGames(any())).thenReturn(List.of());
+        when(gameRepository.count()).thenReturn(0L);
         when(igdbApiClient.searchByGenre("RPG", 20, 0)).thenReturn(List.of(igdbDto));
-        when(gameRepository.findByIgdbId(1942)).thenReturn(Optional.of(cachedGame));
 
         GameSearchResponse result = gameService.searchGames(null, null, "RPG", "-rating", 0, 20);
 
@@ -343,25 +349,26 @@ class GameServiceTest {
         dto2.setName("Another Game");
 
         when(igdbApiClient.fetchCatalogPage(500, 0)).thenReturn(List.of(igdbDto, dto2));
-        when(gameRepository.findByIgdbId(1942)).thenReturn(Optional.empty());
-        when(gameRepository.findByIgdbId(9999)).thenReturn(Optional.empty());
-        when(gameRepository.save(any(Game.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(gameCacheService.cacheIfAbsent(igdbDto)).thenReturn(true);
+        when(gameCacheService.cacheIfAbsent(dto2)).thenReturn(true);
 
-        int cached = gameService.syncIgdbCatalogOffset(0, 500);
+        CatalogSyncResult result = gameService.syncIgdbCatalogOffset(0, 500);
 
-        assertThat(cached).isEqualTo(2);
-        verify(gameRepository, times(2)).save(any(Game.class));
+        assertThat(result.fetched()).isEqualTo(2);
+        assertThat(result.cached()).isEqualTo(2);
+        verify(gameCacheService, times(2)).cacheIfAbsent(any());
     }
 
     @Test
-    void shouldSkipAlreadyCachedGamesDuringIgdbCatalogSync() {
+    void shouldReportFetchedButZeroCachedWhenAllAlreadyInDb() {
         when(igdbApiClient.fetchCatalogPage(500, 0)).thenReturn(List.of(igdbDto));
-        when(gameRepository.findByIgdbId(1942)).thenReturn(Optional.of(cachedGame));
+        when(gameCacheService.cacheIfAbsent(igdbDto)).thenReturn(false);
 
-        int cached = gameService.syncIgdbCatalogOffset(0, 500);
+        CatalogSyncResult result = gameService.syncIgdbCatalogOffset(0, 500);
 
-        assertThat(cached).isEqualTo(0);
-        verify(gameRepository, never()).save(any(Game.class));
+        assertThat(result.fetched()).isEqualTo(1);
+        assertThat(result.cached()).isEqualTo(0);
+        verify(gameCacheService).cacheIfAbsent(igdbDto);
     }
 
     @Test
@@ -371,70 +378,23 @@ class GameServiceTest {
         dto2.setName("Failing Game");
 
         when(igdbApiClient.fetchCatalogPage(500, 0)).thenReturn(List.of(igdbDto, dto2));
-        when(gameRepository.findByIgdbId(1942)).thenReturn(Optional.empty());
-        when(gameRepository.findByIgdbId(9999)).thenReturn(Optional.empty());
-        when(gameRepository.save(any(Game.class)))
-                .thenThrow(new RuntimeException("DB error"))
-                .thenAnswer(inv -> inv.getArgument(0));
+        when(gameCacheService.cacheIfAbsent(igdbDto)).thenThrow(new RuntimeException("DB error"));
+        when(gameCacheService.cacheIfAbsent(dto2)).thenReturn(true);
 
-        int cached = gameService.syncIgdbCatalogOffset(0, 500);
+        CatalogSyncResult result = gameService.syncIgdbCatalogOffset(0, 500);
 
-        assertThat(cached).isEqualTo(1);
+        assertThat(result.fetched()).isEqualTo(2);
+        assertThat(result.cached()).isEqualTo(1);
     }
 
     @Test
     void shouldCacheNewGamesDuringIgdbNewReleasesSync() {
         when(igdbApiClient.fetchNewReleases(500, 0)).thenReturn(List.of(igdbDto));
-        when(gameRepository.findByIgdbId(1942)).thenReturn(Optional.empty());
-        when(gameRepository.save(any(Game.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(gameCacheService.cacheIfAbsent(igdbDto)).thenReturn(true);
 
-        int cached = gameService.syncIgdbNewReleasesOffset(0, 500);
+        CatalogSyncResult result = gameService.syncIgdbNewReleasesOffset(0, 500);
 
-        assertThat(cached).isEqualTo(1);
+        assertThat(result.cached()).isEqualTo(1);
         verify(igdbApiClient).fetchNewReleases(500, 0);
     }
-
-    @Test
-    void shouldEnrichStubsFromIgdb() {
-        Game stub = Game.builder()
-                .id(1L).igdbId(1942).name("The Witcher 3")
-                .genres(new ArrayList<>()).platforms(new ArrayList<>())
-                .tags(new ArrayList<>()).themes(new ArrayList<>())
-                .build();
-
-        when(gameRepository.findGamesNeedingEnrichment(any())).thenReturn(List.of(stub));
-        when(igdbApiClient.fetchGameByIdForEnrichment(1942)).thenReturn(igdbDto);
-        when(gameRepository.save(any(Game.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        int enriched = gameService.enrichNextBatchFromIgdb(10);
-
-        assertThat(enriched).isEqualTo(1);
-        verify(igdbApiClient).fetchGameByIdForEnrichment(1942);
-        verify(gameRepository).save(any(Game.class));
-    }
-
-    @Test
-    void shouldContinueIgdbEnrichmentWhenOneGameFails() {
-        Game stub1 = Game.builder()
-                .id(1L).igdbId(1942).name("Witcher 3")
-                .genres(new ArrayList<>()).platforms(new ArrayList<>())
-                .tags(new ArrayList<>()).themes(new ArrayList<>())
-                .build();
-        Game stub2 = Game.builder()
-                .id(2L).igdbId(9999).name("Other Game")
-                .genres(new ArrayList<>()).platforms(new ArrayList<>())
-                .tags(new ArrayList<>()).themes(new ArrayList<>())
-                .build();
-
-        when(gameRepository.findGamesNeedingEnrichment(any())).thenReturn(List.of(stub1, stub2));
-        when(igdbApiClient.fetchGameByIdForEnrichment(1942)).thenThrow(new RuntimeException("IGDB error"));
-        when(igdbApiClient.fetchGameByIdForEnrichment(9999)).thenReturn(igdbDto);
-        when(gameRepository.save(any(Game.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        int enriched = gameService.enrichNextBatchFromIgdb(10);
-
-        assertThat(enriched).isEqualTo(1);
-        verify(gameRepository, times(1)).save(any(Game.class));
-    }
-
 }

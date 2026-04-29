@@ -1,35 +1,58 @@
 package com.thegamecellar.gameservice.util;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thegamecellar.gameservice.model.dto.GameResponse;
+import com.thegamecellar.gameservice.model.dto.igdb.IgdbAgeRatingDto;
 import com.thegamecellar.gameservice.model.dto.igdb.IgdbGameDto;
-import com.thegamecellar.gameservice.model.dto.igdb.IgdbInvolvedCompanyDto;
+import com.thegamecellar.gameservice.model.dto.igdb.IgdbMultiplayerModeDto;
+import com.thegamecellar.gameservice.model.dto.igdb.IgdbReleaseDateDto;
+import com.thegamecellar.gameservice.model.dto.igdb.IgdbScreenshotDto;
+import com.thegamecellar.gameservice.model.dto.igdb.IgdbVideoDto;
 import com.thegamecellar.gameservice.model.entity.*;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public class GameMapper {
 
+    private static final ObjectMapper JSON = new ObjectMapper();
     private static final String IGDB_COVER_URL_TEMPLATE =
-            "https://images.igdb.com/igdb/image/upload/t_cover_big/%s.jpg";
+            "https://images.igdb.com/igdb/image/upload/t_cover_big_2x/%s.jpg";
+    private static final String IGDB_SCREENSHOT_URL_TEMPLATE =
+            "https://images.igdb.com/igdb/image/upload/t_screenshot_big/%s.jpg";
 
-    // ── IGDB → entity ────────────────────────────────────────────────────────
+    // ── IGDB DTO → Game entity (scalar fields only) ──────────────────────────
+    // Collections are resolved via GameCacheService.cacheGame (find-or-create)
 
     public static Game toEntity(IgdbGameDto dto) {
         Game game = new Game();
         game.setIgdbId(dto.getId());
         game.setName(dto.getName());
         game.setDescription(dto.getSummary());
+        game.setStoryline(dto.getStoryline());
 
         if (dto.getAggregatedRating() != null) {
-            // IGDB scale is 0–100; normalize to 0–5
-            game.setRating(BigDecimal.valueOf(dto.getAggregatedRating() / 20.0)
-                    .setScale(2, RoundingMode.HALF_UP));
+            game.setRating(normalizeRating(dto.getAggregatedRating()));
+        }
+        game.setRatingCount(dto.getAggregatedRatingCount());
+
+        if (dto.getTotalRating() != null) {
+            game.setTotalRating(normalizeRating(dto.getTotalRating()));
+        }
+        game.setTotalRatingCount(dto.getTotalRatingCount());
+
+        game.setCategory(dto.getCategory());
+        if (dto.getParentGame() != null) {
+            game.setParentGameId(dto.getParentGame().getId());
+            game.setParentGameName(dto.getParentGame().getName());
         }
 
         if (dto.getCover() != null && dto.getCover().getImageId() != null) {
@@ -43,82 +66,37 @@ public class GameMapper {
                     .toString());
         }
 
-        if (dto.getInvolvedCompanies() != null) {
-            String devNames = dto.getInvolvedCompanies().stream()
-                    .filter(ic -> ic.isDeveloper() && ic.getCompany() != null)
-                    .map(ic -> ic.getCompany().getName())
-                    .filter(Objects::nonNull)
-                    .reduce((a, b) -> a + "," + b)
-                    .orElse(null);
-            game.setDevelopers(devNames);
-        }
+        game.setDevelopers(extractDevelopers(dto));
 
         return game;
     }
 
-    public static List<GameGenre> toGenreEntities(IgdbGameDto dto, Game game) {
-        if (dto.getGenres() == null) return Collections.emptyList();
-        return dto.getGenres().stream()
-                .map(g -> {
-                    GameGenre genre = new GameGenre();
-                    genre.setGame(game);
-                    genre.setGenreName(g.getName());
-                    return genre;
-                })
-                .toList();
+    /** IGDB scale is 0–100; normalize to 0–5 with 2-decimal precision. */
+    public static BigDecimal normalizeRating(double igdbRating) {
+        return BigDecimal.valueOf(igdbRating / 20.0).setScale(2, RoundingMode.HALF_UP);
     }
 
-    public static List<GamePlatform> toPlatformEntities(IgdbGameDto dto, Game game) {
-        if (dto.getPlatforms() == null) return Collections.emptyList();
-        return dto.getPlatforms().stream()
-                .map(p -> {
-                    GamePlatform platform = new GamePlatform();
-                    platform.setGame(game);
-                    platform.setPlatformName(p.getName());
-                    return platform;
-                })
-                .toList();
+    public static String extractDevelopers(IgdbGameDto dto) {
+        if (dto.getInvolvedCompanies() == null) return null;
+        return dto.getInvolvedCompanies().stream()
+                .filter(ic -> ic.isDeveloper() && ic.getCompany() != null)
+                .map(ic -> ic.getCompany().getName())
+                .filter(Objects::nonNull)
+                .reduce((a, b) -> a + "," + b)
+                .orElse(null);
     }
 
-    public static List<GameTag> toTagEntities(IgdbGameDto dto, Game game) {
-        if (dto.getKeywords() == null) return Collections.emptyList();
-        return dto.getKeywords().stream()
-                .map(k -> {
-                    GameTag tag = new GameTag();
-                    tag.setGame(game);
-                    tag.setTagName(k.getName());
-                    return tag;
-                })
-                .toList();
-    }
-
-    public static List<GameTheme> toThemeEntities(IgdbGameDto dto, Game game) {
-        if (dto.getThemes() == null) return Collections.emptyList();
-        return dto.getThemes().stream()
-                .map(t -> {
-                    GameTheme theme = new GameTheme();
-                    theme.setGame(game);
-                    theme.setThemeName(t.getName());
-                    return theme;
-                })
-                .toList();
-    }
-
-    // ── entity → response ────────────────────────────────────────────────────
+    // ── Game entity → GameResponse ────────────────────────────────────────────
 
     public static GameResponse toResponse(Game game) {
-        List<String> genres = game.getGenres().stream()
-                .map(GameGenre::getGenreName)
-                .toList();
-        List<String> platforms = game.getPlatforms().stream()
-                .map(GamePlatform::getPlatformName)
-                .toList();
-        List<String> tags = game.getTags().stream()
-                .map(GameTag::getTagName)
-                .toList();
-        List<String> themes = game.getThemes().stream()
-                .map(GameTheme::getThemeName)
-                .toList();
+        List<String> genres = game.getGenres().stream().map(Genre::getName).toList();
+        List<String> platforms = game.getPlatforms().stream().map(Platform::getName).toList();
+        List<String> tags = game.getTags().stream().map(Tag::getName).toList();
+        List<String> themes = game.getThemes().stream().map(Theme::getName).toList();
+        List<String> gameModes = game.getGameModes().stream().map(GameMode::getName).toList();
+        List<String> playerPerspectives = game.getPlayerPerspectives().stream().map(PlayerPerspective::getName).toList();
+        List<String> franchises = game.getFranchises().stream().map(Franchise::getName).toList();
+        List<String> collections = game.getCollections().stream().map(GameCollection::getName).toList();
         List<String> developers = game.getDevelopers() != null
                 ? List.of(game.getDevelopers().split(","))
                 : Collections.emptyList();
@@ -127,48 +105,103 @@ public class GameMapper {
                 ? String.format(IGDB_COVER_URL_TEMPLATE, game.getCoverImageId())
                 : null;
 
+        List<String> screenshotUrls = readJson(game.getScreenshots(), new TypeReference<List<String>>() {})
+                .stream()
+                .map(id -> String.format(IGDB_SCREENSHOT_URL_TEMPLATE, id))
+                .toList();
+        List<String> videoIds = readJson(game.getVideos(), new TypeReference<List<String>>() {});
+        List<Integer> dlcIds = readJson(game.getDlcIds(), new TypeReference<List<Integer>>() {});
+        List<Integer> expansionIds = readJson(game.getExpansionIds(), new TypeReference<List<Integer>>() {});
+        List<Integer> similarGameIds = readJson(game.getSimilarGameIds(), new TypeReference<List<Integer>>() {});
+
+        List<GameResponse.AgeRatingDTO> ageRatings = readJson(game.getAgeRatings(),
+                new TypeReference<List<Map<String, Object>>>() {})
+                .stream()
+                .map(row -> GameResponse.AgeRatingDTO.builder()
+                        .category(asInteger(row.get("category")))
+                        .rating(asInteger(row.get("rating")))
+                        .build())
+                .toList();
+
+        List<GameResponse.ReleaseDateDTO> releaseDates = readJson(game.getReleaseDates(),
+                new TypeReference<List<Map<String, Object>>>() {})
+                .stream()
+                .map(row -> GameResponse.ReleaseDateDTO.builder()
+                        .platform(asString(row.get("platform")))
+                        .date(asString(row.get("date")))
+                        .human(asString(row.get("human")))
+                        .build())
+                .toList();
+
+        List<GameResponse.MultiplayerModeDTO> multiplayerModes = readJson(game.getMultiplayerModes(),
+                new TypeReference<List<Map<String, Object>>>() {})
+                .stream()
+                .map(row -> GameResponse.MultiplayerModeDTO.builder()
+                        .platform(asString(row.get("platform")))
+                        .onlineMax(asInteger(row.get("onlineMax")))
+                        .offlineMax(asInteger(row.get("offlineMax")))
+                        .onlineCoopMax(asInteger(row.get("onlineCoopMax")))
+                        .offlineCoopMax(asInteger(row.get("offlineCoopMax")))
+                        .lanCoop(asBoolean(row.get("lanCoop")))
+                        .splitscreen(asBoolean(row.get("splitscreen")))
+                        .campaignCoop(asBoolean(row.get("campaignCoop")))
+                        .dropIn(asBoolean(row.get("dropIn")))
+                        .build())
+                .toList();
+
         return GameResponse.builder()
                 .igdbId(game.getIgdbId())
                 .name(game.getName())
                 .description(game.getDescription())
+                .storyline(game.getStoryline())
                 .rating(game.getRating())
+                .ratingCount(game.getRatingCount())
+                .totalRating(game.getTotalRating())
+                .totalRatingCount(game.getTotalRatingCount())
                 .backgroundImage(game.getBackgroundImage() != null ? game.getBackgroundImage() : coverImageUrl)
                 .coverImageUrl(coverImageUrl)
                 .released(game.getReleased())
                 .esrbRating(game.getEsrbRating())
+                .category(game.getCategory())
+                .parentGameId(game.getParentGameId())
+                .parentGameName(game.getParentGameName())
                 .genres(genres)
                 .platforms(platforms)
                 .developers(developers)
                 .tags(tags)
                 .themes(themes)
+                .gameModes(gameModes)
+                .playerPerspectives(playerPerspectives)
+                .franchises(franchises)
+                .collections(collections)
                 .moods(MoodMapper.getMoods(tags, genres, themes))
+                .screenshotUrls(screenshotUrls)
+                .videoIds(videoIds)
+                .dlcIds(dlcIds)
+                .expansionIds(expansionIds)
+                .similarGameIds(similarGameIds)
+                .ageRatings(ageRatings)
+                .releaseDates(releaseDates)
+                .multiplayerModes(multiplayerModes)
                 .build();
     }
 
-    public static GameResponse toResponseFromIgdb(IgdbGameDto dto) {
-        List<String> genres = dto.getGenres() != null
-                ? dto.getGenres().stream().map(g -> g.getName()).toList()
-                : Collections.emptyList();
-        List<String> platforms = dto.getPlatforms() != null
-                ? dto.getPlatforms().stream().map(p -> p.getName()).toList()
-                : Collections.emptyList();
-        List<String> tags = dto.getKeywords() != null
-                ? dto.getKeywords().stream().map(k -> k.getName()).toList()
-                : Collections.emptyList();
-        List<String> themes = dto.getThemes() != null
-                ? dto.getThemes().stream().map(t -> t.getName()).toList()
-                : Collections.emptyList();
-        List<String> developers = dto.getInvolvedCompanies() != null
-                ? dto.getInvolvedCompanies().stream()
-                        .filter(ic -> ic.isDeveloper() && ic.getCompany() != null)
-                        .map(ic -> ic.getCompany().getName())
-                        .filter(Objects::nonNull)
-                        .toList()
-                : Collections.emptyList();
+    // ── IGDB DTO → GameResponse (bypass DB, used for live IGDB results) ───────
 
-        BigDecimal rating = dto.getAggregatedRating() != null
-                ? BigDecimal.valueOf(dto.getAggregatedRating() / 20.0).setScale(2, RoundingMode.HALF_UP)
-                : null;
+    public static GameResponse toResponseFromIgdb(IgdbGameDto dto) {
+        List<String> genres = nameList(dto.getGenres());
+        List<String> platforms = nameList(dto.getPlatforms());
+        List<String> tags = nameList(dto.getKeywords());
+        List<String> themes = nameList(dto.getThemes());
+        List<String> gameModes = nameList(dto.getGameModes());
+        List<String> playerPerspectives = nameList(dto.getPlayerPerspectives());
+        List<String> franchises = nameList(dto.getFranchises());
+        List<String> collections = nameList(dto.getCollections());
+        String devString = extractDevelopers(dto);
+        List<String> developers = devString != null ? List.of(devString.split(",")) : Collections.emptyList();
+
+        BigDecimal rating = dto.getAggregatedRating() != null ? normalizeRating(dto.getAggregatedRating()) : null;
+        BigDecimal totalRating = dto.getTotalRating() != null ? normalizeRating(dto.getTotalRating()) : null;
 
         String released = dto.getFirstReleaseDate() != null
                 ? Instant.ofEpochSecond(dto.getFirstReleaseDate())
@@ -179,20 +212,133 @@ public class GameMapper {
 
         String coverImageUrl = dto.getCover() != null ? dto.getCover().toUrl() : null;
 
+        List<String> screenshotUrls = dto.getScreenshots() == null ? Collections.emptyList()
+                : dto.getScreenshots().stream()
+                        .map(IgdbScreenshotDto::getImageId)
+                        .filter(Objects::nonNull)
+                        .map(id -> String.format(IGDB_SCREENSHOT_URL_TEMPLATE, id))
+                        .toList();
+
+        List<String> videoIds = dto.getVideos() == null ? Collections.emptyList()
+                : dto.getVideos().stream()
+                        .map(IgdbVideoDto::getVideoId)
+                        .filter(Objects::nonNull)
+                        .toList();
+
+        List<Integer> dlcIds = dto.getDlcs() != null ? new ArrayList<>(dto.getDlcs()) : Collections.emptyList();
+        List<Integer> expansionIds = dto.getExpansions() != null ? new ArrayList<>(dto.getExpansions()) : Collections.emptyList();
+        List<Integer> similarGameIds = dto.getSimilarGames() != null ? new ArrayList<>(dto.getSimilarGames()) : Collections.emptyList();
+
+        List<GameResponse.AgeRatingDTO> ageRatings = dto.getAgeRatings() == null ? Collections.emptyList()
+                : dto.getAgeRatings().stream()
+                        .map(a -> GameResponse.AgeRatingDTO.builder().category(a.getCategory()).rating(a.getRating()).build())
+                        .toList();
+
+        List<GameResponse.ReleaseDateDTO> releaseDates = dto.getReleaseDates() == null ? Collections.emptyList()
+                : dto.getReleaseDates().stream()
+                        .map(r -> GameResponse.ReleaseDateDTO.builder()
+                                .platform(r.getPlatform() != null ? IgdbPlatformMapper.normalize(r.getPlatform().getName()) : null)
+                                .human(r.getHuman())
+                                .date(r.getDate() != null
+                                        ? Instant.ofEpochSecond(r.getDate()).atZone(ZoneId.of("UTC")).toLocalDate().toString()
+                                        : null)
+                                .build())
+                        .toList();
+
+        List<GameResponse.MultiplayerModeDTO> multiplayerModes = dto.getMultiplayerModes() == null ? Collections.emptyList()
+                : dto.getMultiplayerModes().stream()
+                        .map(m -> GameResponse.MultiplayerModeDTO.builder()
+                                .platform(m.getPlatform() != null ? IgdbPlatformMapper.normalize(m.getPlatform().getName()) : null)
+                                .onlineMax(m.getOnlineMax())
+                                .offlineMax(m.getOfflineMax())
+                                .onlineCoopMax(m.getOnlineCoopMax())
+                                .offlineCoopMax(m.getOfflineCoopMax())
+                                .lanCoop(m.getLanCoop())
+                                .splitscreen(m.getSplitscreen())
+                                .campaignCoop(m.getCampaignCoop())
+                                .dropIn(m.getDropIn())
+                                .build())
+                        .toList();
+
+        Integer parentGameId = dto.getParentGame() != null ? dto.getParentGame().getId() : null;
+        String parentGameName = dto.getParentGame() != null ? dto.getParentGame().getName() : null;
+
         return GameResponse.builder()
                 .igdbId(dto.getId())
                 .name(dto.getName())
                 .description(dto.getSummary())
+                .storyline(dto.getStoryline())
                 .rating(rating)
+                .ratingCount(dto.getAggregatedRatingCount())
+                .totalRating(totalRating)
+                .totalRatingCount(dto.getTotalRatingCount())
                 .backgroundImage(coverImageUrl)
                 .coverImageUrl(coverImageUrl)
                 .released(released)
+                .category(dto.getCategory())
+                .parentGameId(parentGameId)
+                .parentGameName(parentGameName)
                 .genres(genres)
                 .platforms(platforms)
                 .tags(tags)
                 .themes(themes)
+                .gameModes(gameModes)
+                .playerPerspectives(playerPerspectives)
+                .franchises(franchises)
+                .collections(collections)
                 .developers(developers)
                 .moods(MoodMapper.getMoods(tags, genres, themes))
+                .screenshotUrls(screenshotUrls)
+                .videoIds(videoIds)
+                .dlcIds(dlcIds)
+                .expansionIds(expansionIds)
+                .similarGameIds(similarGameIds)
+                .ageRatings(ageRatings)
+                .releaseDates(releaseDates)
+                .multiplayerModes(multiplayerModes)
                 .build();
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    private static List<String> nameList(List<com.thegamecellar.gameservice.model.dto.igdb.IgdbNamedEntityDto> source) {
+        return source != null
+                ? source.stream().map(com.thegamecellar.gameservice.model.dto.igdb.IgdbNamedEntityDto::getName).toList()
+                : Collections.emptyList();
+    }
+
+    private static <T> T readJson(String json, TypeReference<T> typeRef) {
+        if (json == null || json.isBlank()) {
+            try {
+                return JSON.readValue("[]", typeRef);
+            } catch (Exception e) {
+                throw new IllegalStateException("readValue([]) failed", e);
+            }
+        }
+        try {
+            return JSON.readValue(json, typeRef);
+        } catch (Exception e) {
+            try {
+                return JSON.readValue("[]", typeRef);
+            } catch (Exception inner) {
+                throw new IllegalStateException("readValue([]) failed", inner);
+            }
+        }
+    }
+
+    private static Integer asInteger(Object o) {
+        if (o == null) return null;
+        if (o instanceof Number n) return n.intValue();
+        try { return Integer.parseInt(o.toString()); } catch (NumberFormatException e) { return null; }
+    }
+
+    private static String asString(Object o) {
+        return o == null ? null : o.toString();
+    }
+
+    private static Boolean asBoolean(Object o) {
+        if (o == null) return null;
+        if (o instanceof Boolean b) return b;
+        return Boolean.parseBoolean(o.toString());
     }
 }

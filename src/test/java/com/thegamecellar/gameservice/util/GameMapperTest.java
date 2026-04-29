@@ -8,14 +8,15 @@ import com.thegamecellar.gameservice.model.entity.*;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class GameMapperTest {
 
-    // ── IGDB → entity ────────────────────────────────────────────────────────
+    // ── IGDB → Game entity ────────────────────────────────────────────────────
 
     @Test
     void shouldMapIgdbDtoToEntity() {
@@ -44,67 +45,14 @@ class GameMapperTest {
         assertThat(entity.getReleased()).isNull();
     }
 
-    @Test
-    void shouldMapIgdbGenresToEntities() {
-        IgdbGameDto dto = buildIgdbDto();
-        Game game = new Game();
-
-        List<GameGenre> genres = GameMapper.toGenreEntities(dto, game);
-
-        assertThat(genres).hasSize(1);
-        assertThat(genres.get(0).getGenreName()).isEqualTo("Role-playing (RPG)");
-        assertThat(genres.get(0).getGame()).isSameAs(game);
-    }
-
-    @Test
-    void shouldMapIgdbKeywordsToTagEntities() {
-        IgdbGameDto dto = buildIgdbDto();
-        Game game = new Game();
-
-        List<GameTag> tags = GameMapper.toTagEntities(dto, game);
-
-        assertThat(tags).hasSize(1);
-        assertThat(tags.get(0).getTagName()).isEqualTo("story rich");
-        assertThat(tags.get(0).getGame()).isSameAs(game);
-    }
-
-    @Test
-    void shouldMapIgdbThemesToEntities() {
-        IgdbGameDto dto = buildIgdbDto();
-        Game game = new Game();
-
-        List<GameTheme> themes = GameMapper.toThemeEntities(dto, game);
-
-        assertThat(themes).hasSize(1);
-        assertThat(themes.get(0).getThemeName()).isEqualTo("Fantasy");
-        assertThat(themes.get(0).getGame()).isSameAs(game);
-    }
-
-    @Test
-    void shouldReturnEmptyListForNullIgdbCollections() {
-        IgdbGameDto dto = new IgdbGameDto();
-
-        assertThat(GameMapper.toGenreEntities(dto, new Game())).isEmpty();
-        assertThat(GameMapper.toTagEntities(dto, new Game())).isEmpty();
-        assertThat(GameMapper.toThemeEntities(dto, new Game())).isEmpty();
-        assertThat(GameMapper.toPlatformEntities(dto, new Game())).isEmpty();
-    }
-
-    // ── entity → response ────────────────────────────────────────────────────
+    // ── Game entity → GameResponse ────────────────────────────────────────────
 
     @Test
     void shouldMapEntityToResponse() {
-        GameTag tag = new GameTag();
-        tag.setTagName("Story Rich");
-
-        GameGenre genre = new GameGenre();
-        genre.setGenreName("RPG");
-
-        GamePlatform platform = new GamePlatform();
-        platform.setPlatformName("PC");
-
-        GameTheme theme = new GameTheme();
-        theme.setThemeName("Fantasy");
+        Tag tag = new Tag("Story Rich");
+        Genre genre = new Genre("RPG");
+        Platform platform = new Platform("PC");
+        Theme theme = new Theme("Fantasy");
 
         Game game = Game.builder()
                 .igdbId(1942)
@@ -112,20 +60,20 @@ class GameMapperTest {
                 .rating(new BigDecimal("4.66"))
                 .coverImageId("abc123")
                 .developers("CD PROJEKT RED")
-                .tags(new ArrayList<>(List.of(tag)))
-                .genres(new ArrayList<>(List.of(genre)))
-                .platforms(new ArrayList<>(List.of(platform)))
-                .themes(new ArrayList<>(List.of(theme)))
+                .tags(new HashSet<>(Set.of(tag)))
+                .genres(new HashSet<>(Set.of(genre)))
+                .platforms(new HashSet<>(Set.of(platform)))
+                .themes(new HashSet<>(Set.of(theme)))
                 .build();
 
         GameResponse response = GameMapper.toResponse(game);
 
         assertThat(response.getIgdbId()).isEqualTo(1942);
         assertThat(response.getName()).isEqualTo("The Witcher 3: Wild Hunt");
-        assertThat(response.getGenres()).containsExactly("RPG");
-        assertThat(response.getPlatforms()).containsExactly("PC");
-        assertThat(response.getTags()).containsExactly("Story Rich");
-        assertThat(response.getThemes()).containsExactly("Fantasy");
+        assertThat(response.getGenres()).containsExactlyInAnyOrder("RPG");
+        assertThat(response.getPlatforms()).containsExactlyInAnyOrder("PC");
+        assertThat(response.getTags()).containsExactlyInAnyOrder("Story Rich");
+        assertThat(response.getThemes()).containsExactlyInAnyOrder("Fantasy");
         assertThat(response.getDevelopers()).containsExactly("CD PROJEKT RED");
         assertThat(response.getCoverImageUrl()).contains("abc123");
         assertThat(response.getMoods()).contains("Story-driven");
@@ -137,16 +85,18 @@ class GameMapperTest {
                 .igdbId(1)
                 .name("Game")
                 .developers(null)
-                .genres(new ArrayList<>())
-                .platforms(new ArrayList<>())
-                .tags(new ArrayList<>())
-                .themes(new ArrayList<>())
+                .genres(new HashSet<>())
+                .platforms(new HashSet<>())
+                .tags(new HashSet<>())
+                .themes(new HashSet<>())
                 .build();
 
         GameResponse response = GameMapper.toResponse(game);
 
         assertThat(response.getDevelopers()).isEmpty();
     }
+
+    // ── IGDB DTO → GameResponse (live bypass) ─────────────────────────────────
 
     @Test
     void shouldMapIgdbDtoDirectlyToResponse() {
@@ -216,5 +166,4 @@ class GameMapperTest {
 
         return dto;
     }
-
 }

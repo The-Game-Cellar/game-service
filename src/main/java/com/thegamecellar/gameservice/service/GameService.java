@@ -5,21 +5,19 @@ import com.thegamecellar.gameservice.model.dto.GameResponse;
 import com.thegamecellar.gameservice.model.dto.GameSearchResponse;
 import com.thegamecellar.gameservice.model.dto.igdb.IgdbGameDto;
 import com.thegamecellar.gameservice.model.entity.Game;
-import com.thegamecellar.gameservice.repository.GameGenreRepository;
-import com.thegamecellar.gameservice.repository.GamePlatformRepository;
+import com.thegamecellar.gameservice.model.entity.Platform;
 import com.thegamecellar.gameservice.repository.GameRepository;
+import com.thegamecellar.gameservice.repository.GenreRepository;
+import com.thegamecellar.gameservice.repository.PlatformRepository;
 import com.thegamecellar.gameservice.util.GameMapper;
 import com.thegamecellar.gameservice.util.MoodMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,8 +27,9 @@ import java.util.Optional;
 public class GameService {
 
     private final GameRepository gameRepository;
-    private final GameGenreRepository gameGenreRepository;
-    private final GamePlatformRepository gamePlatformRepository;
+    private final GenreRepository genreRepository;
+    private final PlatformRepository platformRepository;
+    private final GameCacheService gameCacheService;
     private final IgdbApiClient igdbApiClient;
 
     @Transactional
@@ -39,26 +38,19 @@ public class GameService {
 
         if (cached.isPresent()) {
             Game game = cached.get();
+            // Critical-data stale check on the user-triggered path. Each refresh
+            // here costs an extra IGDB roundtrip, so we only fire on truly
+            // missing core data — the looser cacheIfAbsent stale check picks up
+            // the rest naturally as the worker re-walks the catalog.
             boolean stale = game.getTags().isEmpty()
                     || game.getGenres().isEmpty()
                     || game.getDescription() == null
-                    || game.getDescription().isBlank();
+                    || game.getDescription().isBlank()
+                    || game.getDevelopers() == null;
             if (stale) {
                 try {
                     IgdbGameDto dto = igdbApiClient.fetchGameById(igdbId);
-                    if (game.getTags().isEmpty()) {
-                        game.getTags().addAll(GameMapper.toTagEntities(dto, game));
-                    }
-                    if (game.getGenres().isEmpty()) {
-                        game.getGenres().addAll(GameMapper.toGenreEntities(dto, game));
-                    }
-                    if (game.getDescription() == null || game.getDescription().isBlank()) {
-                        game.setDescription(dto.getSummary());
-                    }
-                    if (game.getCoverImageId() == null && dto.getCover() != null) {
-                        game.setCoverImageId(dto.getCover().getImageId());
-                    }
-                    return GameMapper.toResponse(gameRepository.save(game));
+                    return GameMapper.toResponse(gameCacheService.refreshStaleGame(game, dto));
                 } catch (Exception e) {
                     log.warn("Could not re-fetch stale game igdbId={}: {}", igdbId, e.getMessage());
                     return GameMapper.toResponse(game);
@@ -68,7 +60,7 @@ public class GameService {
         }
 
         IgdbGameDto dto = igdbApiClient.fetchGameById(igdbId);
-        Game saved = cacheGame(dto);
+        Game saved = gameCacheService.cacheGame(dto);
         return GameMapper.toResponse(saved);
     }
 
@@ -97,22 +89,25 @@ public class GameService {
 
     @Transactional
     public GameSearchResponse searchGames(String query, String platform, String genre, String ordering, int page, int pageSize) {
-        boolean noFilters = (query == null || query.isBlank())
-                && (genre == null || genre.isBlank())
-                && (platform == null || platform.isBlank());
+        return searchGames(query, platform, genre, ordering, page, pageSize, false);
+    }
+
+    @Transactional
+    public GameSearchResponse searchGames(String query, String platform, String genre, String ordering, int page, int pageSize, boolean dbOnly) {
+        boolean queryBlank = (query == null || query.isBlank());
+        boolean genreSet = (genre != null && !genre.isBlank());
+        boolean platformSet = (platform != null && !platform.isBlank());
+        boolean noFilters = queryBlank && !genreSet && !platformSet;
+
+        PageRequest pageable = PageRequest.of(page, pageSize, sortFromOrdering(ordering));
 
         if (noFilters) {
             long dbCount = gameRepository.count();
             if (dbCount > 0) {
-                int poolSize = Math.max(200, (page + 1) * pageSize);
-                List<Game> pool = gameRepository.findRecentGames(PageRequest.of(0, poolSize));
-                List<Game> sorted = new ArrayList<>(pool);
-                applyOrdering(sorted, ordering);
-                int from = page * pageSize;
-                int to = Math.min(from + pageSize, sorted.size());
-                if (from < sorted.size()) {
+                List<Game> games = gameRepository.findAll(pageable).getContent();
+                if (!games.isEmpty()) {
                     return GameSearchResponse.builder()
-                            .games(sorted.subList(from, to).stream().map(GameMapper::toResponse).toList())
+                            .games(games.stream().map(GameMapper::toResponse).toList())
                             .totalCount((int) Math.min(dbCount, Integer.MAX_VALUE))
                             .page(page)
                             .pageSize(pageSize)
@@ -121,33 +116,37 @@ public class GameService {
             }
         }
 
-        if ((query == null || query.isBlank()) && genre != null && !genre.isBlank()) {
-            List<Game> cached = gameRepository.findByGenreName(genre, PageRequest.of(0, pageSize * 3));
+        if (queryBlank && genreSet && platformSet) {
+            List<Game> cached = gameRepository.findByGenreAndPlatformName(genre, platform, pageable);
             if (!cached.isEmpty()) {
-                List<Game> sorted = new ArrayList<>(cached);
-                applyOrdering(sorted, ordering);
-                int from = page * pageSize;
-                int to = Math.min(from + pageSize, sorted.size());
-                if (from < sorted.size()) {
-                    long genreTotal = gameRepository.countByGenreName(genre);
-                    return GameSearchResponse.builder()
-                            .games(sorted.subList(from, to).stream().map(GameMapper::toResponse).toList())
-                            .totalCount((int) Math.min(genreTotal, Integer.MAX_VALUE))
-                            .page(page)
-                            .pageSize(pageSize)
-                            .build();
-                }
+                long total = gameRepository.countByGenreAndPlatformName(genre, platform);
+                return GameSearchResponse.builder()
+                        .games(cached.stream().map(GameMapper::toResponse).toList())
+                        .totalCount((int) Math.min(total, Integer.MAX_VALUE))
+                        .page(page)
+                        .pageSize(pageSize)
+                        .build();
             }
-            List<Game> broadPool = gameRepository.findRecentGames(PageRequest.of(0, pageSize * 3));
-            if (!broadPool.isEmpty()) {
-                List<Game> sorted = new ArrayList<>(broadPool);
-                applyOrdering(sorted, ordering);
-                int from = page * pageSize;
-                int to = Math.min(from + pageSize, sorted.size());
-                if (from < sorted.size()) {
+        }
+
+        if (queryBlank && genreSet && !platformSet) {
+            List<Game> cached = gameRepository.findByGenreName(genre, pageable);
+            if (!cached.isEmpty()) {
+                long genreTotal = gameRepository.countByGenreName(genre);
+                return GameSearchResponse.builder()
+                        .games(cached.stream().map(GameMapper::toResponse).toList())
+                        .totalCount((int) Math.min(genreTotal, Integer.MAX_VALUE))
+                        .page(page)
+                        .pageSize(pageSize)
+                        .build();
+            }
+            long dbCount = gameRepository.count();
+            if (dbCount > 0) {
+                List<Game> games = gameRepository.findAll(pageable).getContent();
+                if (!games.isEmpty()) {
                     return GameSearchResponse.builder()
-                            .games(sorted.subList(from, to).stream().map(GameMapper::toResponse).toList())
-                            .totalCount((int) Math.min(gameRepository.count(), Integer.MAX_VALUE))
+                            .games(games.stream().map(GameMapper::toResponse).toList())
+                            .totalCount((int) Math.min(dbCount, Integer.MAX_VALUE))
                             .page(page)
                             .pageSize(pageSize)
                             .build();
@@ -155,13 +154,24 @@ public class GameService {
             }
         }
 
+        if (dbOnly) {
+            return GameSearchResponse.builder()
+                    .games(List.of())
+                    .totalCount(0)
+                    .page(page)
+                    .pageSize(pageSize)
+                    .build();
+        }
+
         try {
             List<IgdbGameDto> igdbResults;
-            if (query != null && !query.isBlank()) {
+            if (!queryBlank) {
                 igdbResults = igdbApiClient.searchGames(query, pageSize, page * pageSize);
-            } else if (genre != null && !genre.isBlank()) {
+            } else if (genreSet && platformSet) {
+                igdbResults = igdbApiClient.searchByGenreAndPlatform(genre, platform, pageSize, page * pageSize);
+            } else if (genreSet) {
                 igdbResults = igdbApiClient.searchByGenre(genre, pageSize, page * pageSize);
-            } else if (platform != null && !platform.isBlank()) {
+            } else if (platformSet) {
                 igdbResults = igdbApiClient.fetchPopularGames(platform, pageSize, page * pageSize);
             } else {
                 igdbResults = igdbApiClient.fetchCatalogPage(pageSize, page * pageSize);
@@ -169,7 +179,7 @@ public class GameService {
 
             List<GameResponse> games = igdbResults.stream()
                     .map(dto -> {
-                        cacheIfAbsent(dto);
+                        gameCacheService.cacheIfAbsent(dto);
                         return GameMapper.toResponseFromIgdb(dto);
                     })
                     .toList();
@@ -196,7 +206,7 @@ public class GameService {
         List<IgdbGameDto> igdbResults = igdbApiClient.fetchPopularGames(platform, 20, page * 20);
         List<GameResponse> games = igdbResults.stream()
                 .map(dto -> {
-                    cacheIfAbsent(dto);
+                    gameCacheService.cacheIfAbsent(dto);
                     return GameMapper.toResponseFromIgdb(dto);
                 })
                 .toList();
@@ -213,7 +223,10 @@ public class GameService {
     public GameSearchResponse getUpcomingGames(String platform) {
         List<IgdbGameDto> igdbResults = igdbApiClient.fetchUpcomingGames(platform, 20);
         List<GameResponse> games = igdbResults.stream()
-                .map(GameMapper::toResponseFromIgdb)
+                .map(dto -> {
+                    gameCacheService.cacheIfAbsent(dto);
+                    return GameMapper.toResponseFromIgdb(dto);
+                })
                 .toList();
 
         return GameSearchResponse.builder()
@@ -238,7 +251,7 @@ public class GameService {
     }
 
     public List<String> getGenres() {
-        List<String> cached = gameGenreRepository.findAllDistinctGenreNames();
+        List<String> cached = genreRepository.findAllNames();
         if (!cached.isEmpty()) {
             return cached;
         }
@@ -248,116 +261,94 @@ public class GameService {
     }
 
     public List<String> getPlatforms() {
-        return List.of("PC", "PlayStation 5", "PlayStation 4", "Xbox Series S/X", "Xbox One", "Nintendo Switch");
+        return platformRepository.findAll().stream()
+                .map(Platform::getName)
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
+    }
+
+    // ── Admin backfill ────────────────────────────────────────────────────────
+
+    /**
+     * One-shot backfill for games cached before GS26 (developers column added)
+     * — re-fetches each {@code developers IS NULL} row from IGDB so the column
+     * gets populated. Honours the same 250 ms IGDB rate-limit gap used by the
+     * catalog worker. Designed to run via {@link AdminSyncExecutor} so only one
+     * admin job runs at a time.
+     */
+    public void backfillDevelopers() {
+        long total = gameRepository.countByDevelopersIsNull();
+        log.info("Developer backfill starting — {} candidate games", total);
+        int processed = 0;
+        int updated = 0;
+        int batchSize = 100;
+
+        while (true) {
+            List<Game> batch = gameRepository.findByDevelopersIsNull(PageRequest.of(0, batchSize));
+            if (batch.isEmpty()) break;
+            for (Game game : batch) {
+                try {
+                    IgdbGameDto dto = igdbApiClient.fetchGameById(game.getIgdbId());
+                    gameCacheService.refreshStaleGame(game, dto);
+                    if (game.getDevelopers() != null) updated++;
+                } catch (Exception e) {
+                    log.warn("Developer backfill: failed for igdbId={}: {}", game.getIgdbId(), e.getMessage());
+                }
+                processed++;
+                try {
+                    Thread.sleep(250);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Developer backfill interrupted at processed={}", processed);
+                    return;
+                }
+            }
+            log.info("Developer backfill progress: processed={}/{} updated={}", processed, total, updated);
+        }
+        log.info("Developer backfill complete — processed={} updated={}", processed, updated);
     }
 
     // ── IGDB catalog worker support ───────────────────────────────────────────
 
-    @Transactional
-    public int syncIgdbCatalogOffset(int offset, int limit) {
+    public CatalogSyncResult syncIgdbCatalogOffset(int offset, int limit) {
         List<IgdbGameDto> results = igdbApiClient.fetchCatalogPage(limit, offset);
         int cached = 0;
         for (IgdbGameDto dto : results) {
             try {
-                if (gameRepository.findByIgdbId(dto.getId()).isEmpty()) {
-                    cacheGame(dto);
-                    cached++;
-                }
+                if (gameCacheService.cacheIfAbsent(dto)) cached++;
             } catch (Exception e) {
                 log.warn("IGDB catalog sync: failed to cache igdbId={}: {}", dto.getId(), e.getMessage());
             }
         }
-        return cached;
+        return new CatalogSyncResult(results.size(), cached);
     }
 
-    @Transactional
-    public int syncIgdbNewReleasesOffset(int offset, int limit) {
+    public CatalogSyncResult syncIgdbNewReleasesOffset(int offset, int limit) {
         List<IgdbGameDto> results = igdbApiClient.fetchNewReleases(limit, offset);
         int cached = 0;
         for (IgdbGameDto dto : results) {
             try {
-                if (gameRepository.findByIgdbId(dto.getId()).isEmpty()) {
-                    cacheGame(dto);
-                    cached++;
-                }
+                if (gameCacheService.cacheIfAbsent(dto)) cached++;
             } catch (Exception e) {
                 log.warn("IGDB new releases sync: failed to cache igdbId={}: {}", dto.getId(), e.getMessage());
             }
         }
-        return cached;
-    }
-
-    @Transactional
-    public int enrichNextBatchFromIgdb(int limit) {
-        List<Game> stubs = gameRepository.findGamesNeedingEnrichment(PageRequest.of(0, limit));
-        int enriched = 0;
-        for (Game game : stubs) {
-            try {
-                IgdbGameDto dto = igdbApiClient.fetchGameByIdForEnrichment(game.getIgdbId());
-                if (game.getDescription() == null || game.getDescription().isBlank()) {
-                    game.setDescription(dto.getSummary());
-                }
-                if (dto.getCover() != null && game.getCoverImageId() == null) {
-                    game.setCoverImageId(dto.getCover().getImageId());
-                }
-                if (game.getGenres().isEmpty()) {
-                    game.getGenres().addAll(GameMapper.toGenreEntities(dto, game));
-                }
-                if (game.getThemes().isEmpty()) {
-                    game.getThemes().addAll(GameMapper.toThemeEntities(dto, game));
-                }
-                if (game.getTags().isEmpty()) {
-                    game.getTags().addAll(GameMapper.toTagEntities(dto, game));
-                }
-                if (game.getDevelopers() == null && dto.getInvolvedCompanies() != null) {
-                    String devNames = dto.getInvolvedCompanies().stream()
-                            .filter(ic -> ic.isDeveloper() && ic.getCompany() != null)
-                            .map(ic -> ic.getCompany().getName())
-                            .filter(java.util.Objects::nonNull)
-                            .reduce((a, b) -> a + "," + b)
-                            .orElse(null);
-                    game.setDevelopers(devNames);
-                }
-                game.setEnrichedAt(java.time.LocalDateTime.now());
-                gameRepository.save(game);
-                enriched++;
-            } catch (Exception e) {
-                log.warn("IGDB enrichment failed igdbId={}: {}", game.getIgdbId(), e.getMessage());
-            }
-        }
-        return enriched;
+        return new CatalogSyncResult(results.size(), cached);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private void applyOrdering(List<Game> games, String ordering) {
+    private Sort sortFromOrdering(String ordering) {
         if (ordering == null || ordering.isBlank() || ordering.equals("-rating")) {
-            games.sort(Comparator.comparing((Game g) -> g.getRating() == null ? BigDecimal.ZERO : g.getRating(), Comparator.reverseOrder()));
-        } else if (ordering.equals("-released")) {
-            games.sort(Comparator.comparing(g -> g.getReleased() == null ? "" : g.getReleased(), Comparator.reverseOrder()));
-        } else if (ordering.equals("released")) {
-            games.sort(Comparator.comparing(g -> g.getReleased() == null ? "" : g.getReleased()));
-        } else if (ordering.equals("name")) {
-            games.sort(Comparator.comparing(g -> g.getName() == null ? "" : g.getName()));
-        } else if (ordering.equals("-name")) {
-            games.sort(Comparator.comparing(g -> g.getName() == null ? "" : g.getName(), Comparator.reverseOrder()));
+            return Sort.by(Sort.Order.desc("rating").nullsLast());
         }
+        return switch (ordering) {
+            case "rating"    -> Sort.by(Sort.Order.asc("rating").nullsLast());
+            case "-released" -> Sort.by(Sort.Order.desc("released").nullsLast());
+            case "released"  -> Sort.by(Sort.Order.asc("released").nullsLast());
+            case "name"      -> Sort.by(Sort.Order.asc("name").nullsLast());
+            case "-name"     -> Sort.by(Sort.Order.desc("name").nullsLast());
+            default          -> Sort.by(Sort.Order.desc("rating").nullsLast());
+        };
     }
-
-    private void cacheIfAbsent(IgdbGameDto dto) {
-        if (gameRepository.findByIgdbId(dto.getId()).isEmpty()) {
-            cacheGame(dto);
-        }
-    }
-
-    private Game cacheGame(IgdbGameDto dto) {
-        Game game = GameMapper.toEntity(dto);
-        game.setGenres(GameMapper.toGenreEntities(dto, game));
-        game.setPlatforms(GameMapper.toPlatformEntities(dto, game));
-        game.setTags(GameMapper.toTagEntities(dto, game));
-        game.setThemes(GameMapper.toThemeEntities(dto, game));
-        game.setEnrichedAt(java.time.LocalDateTime.now());
-        return gameRepository.save(game);
-    }
-
 }

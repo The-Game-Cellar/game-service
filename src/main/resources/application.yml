@@ -13,23 +13,28 @@ spring:
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     show-sql: false
     open-in-view: false
 
 server:
   port: ${GAME_SERVICE_PORT:8081}
 
+logging:
+  pattern:
+    console: "%clr(%d{HH:mm:ss.SSS}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr([%X{requestId:-........}]){magenta} %clr([%-15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx"
+
 igdb:
   client-id: ${TWITCH_CLIENT_ID}
   client-secret: ${TWITCH_CLIENT_SECRET}
+  connect-timeout: ${IGDB_CONNECT_TIMEOUT:2000}
+  read-timeout: ${IGDB_READ_TIMEOUT:10000}
   api:
     base-url: ${IGDB_API_BASE_URL:https://api.igdb.com/v4}
   worker:
     enabled: ${IGDB_WORKER_ENABLED:true}
     discovery-limit: ${IGDB_WORKER_DISCOVERY_LIMIT:500}
-    discovery-pages: ${IGDB_WORKER_DISCOVERY_PAGES:100}
+    discovery-pages: ${IGDB_WORKER_DISCOVERY_PAGES:200}
     new-releases-pages: ${IGDB_WORKER_NEW_RELEASES_PAGES:10}
-    enrichment-limit: ${IGDB_WORKER_ENRICHMENT_LIMIT:400}
     cron: ${IGDB_WORKER_CRON:0 30 3 * * *}
     rate-limit-delay-ms: ${IGDB_WORKER_RATE_LIMIT_DELAY_MS:250}
