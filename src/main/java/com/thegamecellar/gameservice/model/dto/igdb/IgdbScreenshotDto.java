@@ -4,14 +4,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 @Data
-public class IgdbCoverDto {
+public class IgdbScreenshotDto {
     private Integer id;
 
     @JsonProperty("image_id")
     private String imageId;
-
-    public String toUrl() {
-        if (imageId == null) return null;
-        return "https://images.igdb.com/igdb/image/upload/t_cover_big_2x/" + imageId + ".jpg";
-    }
 }

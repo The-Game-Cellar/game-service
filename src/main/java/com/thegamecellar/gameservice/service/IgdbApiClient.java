@@ -14,6 +14,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -22,14 +24,22 @@ import java.util.List;
 @Service
 public class IgdbApiClient {
 
-    private static final String IGDB_HOST = "https://api.igdb.com";
+    private static final String IGDB_HOST = "api.igdb.com";
     private static final String FIELDS_GAME =
-            "fields id,name,summary,aggregated_rating,aggregated_rating_count,first_release_date," +
-            "cover.image_id,genres.name,platforms.name,themes.name,keywords.name;";
-    private static final String FIELDS_GAME_ENRICHED =
-            "fields id,name,summary,aggregated_rating,aggregated_rating_count,first_release_date," +
+            "fields id,name,summary,storyline,aggregated_rating,aggregated_rating_count," +
+            "total_rating,total_rating_count,first_release_date,game_type," +
+            "parent_game.id,parent_game.name," +
             "cover.image_id,genres.name,platforms.name,themes.name,keywords.name," +
-            "involved_companies.company.name,involved_companies.developer;";
+            "game_modes.name,player_perspectives.name,franchises.name,collections.name," +
+            "involved_companies.company.name,involved_companies.developer," +
+            "screenshots.image_id,videos.video_id,videos.name," +
+            "dlcs,expansions,similar_games," +
+            "age_ratings.category,age_ratings.rating," +
+            "release_dates.date,release_dates.human,release_dates.platform.name," +
+            "multiplayer_modes.platform.name,multiplayer_modes.onlinemax,multiplayer_modes.offlinemax," +
+            "multiplayer_modes.onlinecoopmax,multiplayer_modes.offlinecoopmax," +
+            "multiplayer_modes.lancoop,multiplayer_modes.splitscreen," +
+            "multiplayer_modes.campaigncoop,multiplayer_modes.dropin;";
 
     private final RestTemplate restTemplate;
     private final IgdbTokenService tokenService;
@@ -45,13 +55,6 @@ public class IgdbApiClient {
 
     public IgdbGameDto fetchGameById(int igdbId) {
         String query = FIELDS_GAME + " where id = " + igdbId + "; limit 1;";
-        List<IgdbGameDto> results = queryGames(query);
-        if (results.isEmpty()) throw new GameNotFoundException(igdbId);
-        return results.get(0);
-    }
-
-    public IgdbGameDto fetchGameByIdForEnrichment(int igdbId) {
-        String query = FIELDS_GAME_ENRICHED + " where id = " + igdbId + "; limit 1;";
         List<IgdbGameDto> results = queryGames(query);
         if (results.isEmpty()) throw new GameNotFoundException(igdbId);
         return results.get(0);
@@ -79,6 +82,17 @@ public class IgdbApiClient {
                 " sort aggregated_rating_count desc;" +
                 " limit " + limit + "; offset " + offset + ";";
         return queryGames(query);
+    }
+
+    public List<IgdbGameDto> searchByGenreAndPlatform(String genre, String platform, int limit, int offset) {
+        StringBuilder query = new StringBuilder(FIELDS_GAME);
+        query.append(" where genres.name = \"").append(sanitize(genre)).append("\"");
+        IgdbPlatformMapper.getIgdbId(platform)
+                .ifPresent(id -> query.append(" & platforms = (").append(id).append(")"));
+        query.append(";");
+        query.append(" sort aggregated_rating_count desc;");
+        query.append(" limit ").append(limit).append("; offset ").append(offset).append(";");
+        return queryGames(query.toString());
     }
 
     public List<IgdbGameDto> fetchPopularGames(String platform, int limit, int offset) {
@@ -148,14 +162,30 @@ public class IgdbApiClient {
 
     private String endpoint(String path) {
         String url = baseUrl + path;
-        if (!url.startsWith(IGDB_HOST)) {
-            throw new IgdbApiException("Request blocked: host not in allowlist: " + url);
+        try {
+            URI uri = new URI(url);
+            String host = uri.getHost();
+            String scheme = uri.getScheme();
+            if (host == null || !"https".equalsIgnoreCase(scheme) || !IGDB_HOST.equalsIgnoreCase(host)) {
+                throw new IgdbApiException("Request blocked: host not in allowlist: " + url);
+            }
+        } catch (URISyntaxException e) {
+            throw new IgdbApiException("Request blocked: invalid URL: " + url, e);
         }
         return url;
     }
 
+    private static final int SANITIZE_MAX_LENGTH = 100;
+    private static final java.util.regex.Pattern SANITIZE_ALLOWED =
+            java.util.regex.Pattern.compile("[^\\p{L}\\p{Nd} \\-':.&/]");
+
     private static String sanitize(String input) {
         if (input == null) return "";
-        return input.replace("\"", "").replace(";", "").replace("\\", "");
+        String normalized = java.text.Normalizer.normalize(input, java.text.Normalizer.Form.NFKC);
+        String stripped = SANITIZE_ALLOWED.matcher(normalized).replaceAll("");
+        if (stripped.length() > SANITIZE_MAX_LENGTH) {
+            stripped = stripped.substring(0, SANITIZE_MAX_LENGTH);
+        }
+        return stripped.trim();
     }
 }

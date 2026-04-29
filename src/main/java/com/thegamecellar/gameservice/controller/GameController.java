@@ -24,7 +24,7 @@ public class GameController {
     private final GameService gameService;
 
     @GetMapping("/{igdbId}")
-    public ResponseEntity<GameResponse> getGameById(@PathVariable Integer igdbId) {
+    public ResponseEntity<GameResponse> getGameById(@PathVariable @Min(1) Integer igdbId) {
         return ResponseEntity.ok(gameService.getGameById(igdbId));
     }
 
@@ -36,7 +36,8 @@ public class GameController {
             @RequestParam(required = false) String mood,
             @RequestParam(defaultValue = "-rating") @Pattern(regexp = "-rating|-released|released|name|-name") String ordering,
             @RequestParam(defaultValue = "0") @Min(0) @Max(500) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize,
+            @RequestParam(defaultValue = "false") boolean dbOnly) {
         boolean moodOnly = mood != null && !mood.isBlank()
                 && (query == null || query.isBlank())
                 && (platform == null || platform.isBlank())
@@ -44,7 +45,7 @@ public class GameController {
         if (moodOnly) {
             return ResponseEntity.ok(gameService.searchByMood(mood, page, pageSize));
         }
-        return ResponseEntity.ok(gameService.searchGames(query, platform, genre, ordering, page, pageSize));
+        return ResponseEntity.ok(gameService.searchGames(query, platform, genre, ordering, page, pageSize, dbOnly));
     }
 
     @GetMapping("/moods")
@@ -55,7 +56,7 @@ public class GameController {
     @GetMapping("/popular")
     public ResponseEntity<GameSearchResponse> getPopularGames(
             @RequestParam(required = false) String platform,
-            @RequestParam(defaultValue = "0") int page) {
+            @RequestParam(defaultValue = "0") @Min(0) @Max(500) int page) {
         return ResponseEntity.ok(gameService.getPopularGames(platform, page));
     }
 

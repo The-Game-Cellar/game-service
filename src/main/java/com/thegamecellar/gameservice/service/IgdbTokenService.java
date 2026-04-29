@@ -23,7 +23,7 @@ public class IgdbTokenService {
     private final String clientSecret;
 
     private volatile String accessToken;
-    private volatile Instant expiresAt = Instant.MIN;
+    private volatile Instant expiresAt = Instant.EPOCH;
 
     public IgdbTokenService(@Qualifier("igdbRestTemplate") RestTemplate restTemplate,
                             @Value("${igdb.client-id}") String clientId,
