@@ -81,4 +81,20 @@ public class GameController {
     public ResponseEntity<Map<String, List<String>>> getPlatforms() {
         return ResponseEntity.ok(Map.of("platforms", gameService.getPlatforms()));
     }
+
+    @GetMapping("/by-franchise/{name}")
+    public ResponseEntity<List<GameResponse>> getByFranchise(
+            @PathVariable String name,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+            @RequestParam(required = false) @Min(1) Integer excludeIgdbId) {
+        return ResponseEntity.ok(gameService.getByFranchise(name, limit, excludeIgdbId));
+    }
+
+    @GetMapping("/by-collection/{name}")
+    public ResponseEntity<List<GameResponse>> getByCollection(
+            @PathVariable String name,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+            @RequestParam(required = false) @Min(1) Integer excludeIgdbId) {
+        return ResponseEntity.ok(gameService.getByCollection(name, limit, excludeIgdbId));
+    }
 }

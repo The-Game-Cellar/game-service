@@ -34,4 +34,10 @@ public interface GameRepository extends JpaRepository<Game, Long> {
     List<Game> findByDevelopersIsNull(Pageable pageable);
 
     long countByDevelopersIsNull();
+
+    @Query("SELECT g FROM Game g WHERE g.id IN (SELECT DISTINCT g2.id FROM Game g2 JOIN g2.franchises f WHERE LOWER(f.name) = LOWER(:franchiseName)) AND g.category = 0 AND g.parentGameId IS NULL")
+    List<Game> findByFranchiseName(@Param("franchiseName") String franchiseName, Pageable pageable);
+
+    @Query("SELECT g FROM Game g WHERE g.id IN (SELECT DISTINCT g2.id FROM Game g2 JOIN g2.collections c WHERE LOWER(c.name) = LOWER(:collectionName)) AND g.category = 0 AND g.parentGameId IS NULL")
+    List<Game> findByCollectionName(@Param("collectionName") String collectionName, Pageable pageable);
 }

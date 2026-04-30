@@ -267,6 +267,58 @@ public class GameService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<GameResponse> getByFranchise(String franchiseName, int limit, Integer excludeIgdbId) {
+        Sort sort = Sort.by(Sort.Order.asc("released").nullsLast());
+        List<Game> raw = gameRepository.findByFranchiseName(franchiseName, PageRequest.of(0, Math.min(limit * 4, 100), sort));
+        return dedupeVariants(raw, excludeIgdbId, limit).stream()
+                .map(GameMapper::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<GameResponse> getByCollection(String collectionName, int limit, Integer excludeIgdbId) {
+        Sort sort = Sort.by(Sort.Order.asc("released").nullsLast());
+        List<Game> raw = gameRepository.findByCollectionName(collectionName, PageRequest.of(0, Math.min(limit * 4, 100), sort));
+        return dedupeVariants(raw, excludeIgdbId, limit).stream()
+                .map(GameMapper::toResponse)
+                .toList();
+    }
+
+    /**
+     * Drops edition / anniversary / "complete" variants that IGDB miscategorises
+     * as {@code category=0} main games. A game is treated as a variant when its
+     * name starts with an already-kept name plus a separator ({@code " - "} or
+     * {@code ": "}). Sorting by release date asc + name length asc ensures the
+     * canonical base name lands first when releases tie.
+     */
+    private static List<com.thegamecellar.gameservice.model.entity.Game> dedupeVariants(
+            List<com.thegamecellar.gameservice.model.entity.Game> raw, Integer excludeIgdbId, int limit) {
+        List<com.thegamecellar.gameservice.model.entity.Game> sorted = raw.stream()
+                .sorted(java.util.Comparator
+                        .comparing(com.thegamecellar.gameservice.model.entity.Game::getReleased,
+                                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))
+                        .thenComparingInt(g -> g.getName() == null ? 0 : g.getName().length()))
+                .toList();
+
+        List<String> seenNames = new java.util.ArrayList<>();
+        List<com.thegamecellar.gameservice.model.entity.Game> result = new java.util.ArrayList<>();
+        for (com.thegamecellar.gameservice.model.entity.Game g : sorted) {
+            if (result.size() >= limit) break;
+            String n = g.getName();
+            if (n == null) continue;
+            boolean isVariant = seenNames.stream()
+                    .anyMatch(kn -> n.startsWith(kn + " - ") || n.startsWith(kn + ": "));
+            if (isVariant) continue;
+
+            seenNames.add(n);
+            if (excludeIgdbId == null || !excludeIgdbId.equals(g.getIgdbId())) {
+                result.add(g);
+            }
+        }
+        return result;
+    }
+
     // ── Admin backfill ────────────────────────────────────────────────────────
 
     /**
