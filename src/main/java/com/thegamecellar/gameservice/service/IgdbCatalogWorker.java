@@ -31,6 +31,9 @@ public class IgdbCatalogWorker {
     @Value("${igdb.worker.new-releases-pages:10}")
     private int newReleasesPages;
 
+    @Value("${igdb.worker.upcoming-pages:20}")
+    private int upcomingPages;
+
     @Value("${igdb.worker.rate-limit-delay-ms:250}")
     private long rateLimitDelayMs;
 
@@ -57,6 +60,10 @@ public class IgdbCatalogWorker {
         runMainDiscovery(startOffset);
 
         runNewReleasesDiscovery();
+
+        runUpcomingReleasesDiscovery();
+
+        runUpcomingRefresh();
 
         log.info("IGDB catalog sync complete");
     }
@@ -104,6 +111,43 @@ public class IgdbCatalogWorker {
             }
         }
         log.info("New releases discovery complete — {} new games", newGames);
+    }
+
+    private void runUpcomingReleasesDiscovery() {
+        int newGames = 0;
+        int offset = 0;
+        for (int i = 0; i < upcomingPages; i++, offset += discoveryLimit) {
+            try {
+                CatalogSyncResult result = gameService.syncIgdbUpcomingOffset(offset, discoveryLimit);
+                newGames += result.cached();
+                if (result.fetched() == 0) break;
+                rateLimitSleep();
+            } catch (Exception e) {
+                log.error("Upcoming releases discovery failed at offset {}: {}", offset, e.getMessage());
+            }
+        }
+        log.info("Upcoming releases discovery complete — {} new games", newGames);
+    }
+
+    /**
+     * Daily refresh over every cached game whose canonical first_release_date is in the
+     * future. Force-overwrites the volatile fields (date, hypes, per-platform releases,
+     * totalRating) so date slips and hype movement propagate within 24h. Sized for the
+     * upcoming subset only, which is typically ~1-3k games even on a 100k catalog — well
+     * inside the daily IGDB rate budget.
+     */
+    private void runUpcomingRefresh() {
+        java.util.List<Integer> upcomingIds = gameService.findUpcomingIgdbIds();
+        int refreshed = 0;
+        for (Integer igdbId : upcomingIds) {
+            try {
+                if (gameService.refreshUpcomingRow(igdbId)) refreshed++;
+                rateLimitSleep();
+            } catch (Exception e) {
+                log.error("Upcoming refresh failed for igdbId={}: {}", igdbId, e.getMessage());
+            }
+        }
+        log.info("Upcoming refresh complete — {}/{} rows updated", refreshed, upcomingIds.size());
     }
 
     private void rateLimitSleep() {

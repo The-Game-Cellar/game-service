@@ -1,0 +1,72 @@
+# Derived custom genres — rule-based promotion of tags / themes to first-class genres.
+#
+# Each top-level key is the genre name. Each rule has one or more match blocks:
+#   tagsAny:    list of tags — rule fires if game has ANY of them
+#   tagsAll:    list of tags — rule fires if game has ALL of them
+#   themesAny:  list of themes — rule fires if game has ANY of them
+#   themesAll:  list of themes — rule fires if game has ALL of them
+#
+# Logic: blocks combine with OR (rule fires if at least one block matches). Inside
+# *All blocks all entries must be present. Multiple rules can fire on the same game.
+#
+# Both YAML entries and incoming IGDB tag / theme names are normalized through the
+# same pipeline as CuratedTagAllowlist (lowercase, dash-to-space, plural-strip on
+# tokens > 4 chars), so surface-form variations like "Souls-Like" / "souls like" /
+# "souls likes" all collapse to the same key.
+#
+# Rule names must NOT collide with existing IGDB genre names — startup fails fast
+# if a collision is detected.
+#
+# Workflow: edit this file, restart game-service, run
+#   POST /api/v1/admin/derive-genres
+# to backfill against the existing cached catalog.
+
+Roguelike:
+  tagsAny: [roguelike, permadeath, procedural generation,
+            action roguelike, roguelike deckbuilder, traditional roguelike,
+            randomly generated dungeons, randomly generated maps,
+            random level generation]
+
+Roguelite:
+  tagsAny: [roguelite, action roguelite]
+
+Metroidvania:
+  tagsAny: [metroidvania]
+
+# No Soulslike rule. IGDB does not tag canonical Souls titles (Dark Souls, Sekiro,
+# Bloodborne, Elden Ring) with "souls-like" / "soulslike" keywords — only successors
+# to that style carry those tags. There is no reliable signal in IGDB's vocabulary
+# to derive a Soulslike genre, and a manually-curated allowlist would have to grow
+# every release. Souls titles already classify under existing IGDB genres + tags
+# (Action / Role-playing / dark fantasy / parrying / interconnected-world).
+
+Survival Horror:
+  tagsAny: [survival horror, psychological horror,
+            cosmic horror, body horror, gothic horror, eldritch horror,
+            creepypasta, analog horror, surreal horror, mascot horror,
+            cozy horror, extraction horror, first person horror]
+
+# Horror is intentionally additive with Survival Horror — a game with both signals matches
+# both rules. Survival Horror is the narrower tag-based subset, Horror is the broad theme.
+# A horror-heavy library will see two rows in Recommendations: a wide Horror row + a focused
+# Survival Horror row. Standalone horror games (without specific sub-tags) only match Horror.
+Horror:
+  themesAny: [Horror]
+
+Action:
+  themesAny: [Action]
+
+Sci-fi:
+  themesAny: [Science fiction]
+
+Fantasy:
+  themesAny: [Fantasy]
+
+Sandbox:
+  themesAny: [Sandbox]
+
+Stealth:
+  themesAny: [Stealth]
+
+Survival:
+  themesAny: [Survival]

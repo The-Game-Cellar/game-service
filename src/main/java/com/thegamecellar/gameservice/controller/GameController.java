@@ -2,6 +2,7 @@ package com.thegamecellar.gameservice.controller;
 
 import com.thegamecellar.gameservice.model.dto.GameResponse;
 import com.thegamecellar.gameservice.model.dto.GameSearchResponse;
+import com.thegamecellar.gameservice.model.dto.PlatformsResponse;
 import com.thegamecellar.gameservice.service.GameService;
 import com.thegamecellar.gameservice.util.MoodMapper;
 import jakarta.validation.constraints.Max;
@@ -34,18 +35,14 @@ public class GameController {
             @RequestParam(required = false) String platform,
             @RequestParam(required = false) String genre,
             @RequestParam(required = false) String mood,
+            @RequestParam(required = false) String gameMode,
+            @RequestParam(required = false) String perspective,
+            @RequestParam(defaultValue = "main") @Pattern(regexp = "main|variant|all") String gameType,
             @RequestParam(defaultValue = "-rating") @Pattern(regexp = "-rating|-released|released|name|-name") String ordering,
             @RequestParam(defaultValue = "0") @Min(0) @Max(500) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize,
             @RequestParam(defaultValue = "false") boolean dbOnly) {
-        boolean moodOnly = mood != null && !mood.isBlank()
-                && (query == null || query.isBlank())
-                && (platform == null || platform.isBlank())
-                && (genre == null || genre.isBlank());
-        if (moodOnly) {
-            return ResponseEntity.ok(gameService.searchByMood(mood, page, pageSize));
-        }
-        return ResponseEntity.ok(gameService.searchGames(query, platform, genre, ordering, page, pageSize, dbOnly));
+        return ResponseEntity.ok(gameService.searchGames(query, platform, genre, mood, ordering, page, pageSize, dbOnly, gameType, gameMode, perspective));
     }
 
     @GetMapping("/moods")
@@ -62,8 +59,30 @@ public class GameController {
 
     @GetMapping("/upcoming")
     public ResponseEntity<GameSearchResponse> getUpcomingGames(
-            @RequestParam(required = false) String platform) {
-        return ResponseEntity.ok(gameService.getUpcomingGames(platform));
+            @RequestParam(required = false) String platform,
+            @RequestParam(defaultValue = "90") @Min(0) @Max(3650) int windowDays,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+            @RequestParam(required = false) String excludeIds) {
+        List<String> platforms = (platform == null || platform.isBlank())
+                ? List.of()
+                : List.of(platform.split(","));
+        java.util.Set<Integer> exclude = java.util.Set.of();
+        if (excludeIds != null && !excludeIds.isBlank()) {
+            exclude = java.util.Arrays.stream(excludeIds.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .map(s -> {
+                        try { return Integer.parseInt(s); } catch (NumberFormatException e) { return null; }
+                    })
+                    .filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toSet());
+        }
+        return ResponseEntity.ok(gameService.getUpcomingGames(platforms, windowDays, limit, exclude));
+    }
+
+    @GetMapping("/upcoming/platforms")
+    public ResponseEntity<Map<String, List<String>>> getUpcomingPlatforms() {
+        return ResponseEntity.ok(Map.of("platforms", gameService.getUpcomingPlatformNames()));
     }
 
     @GetMapping("/random")
@@ -72,14 +91,23 @@ public class GameController {
         return ResponseEntity.ok(gameService.getRandomGames(limit));
     }
 
+    @GetMapping("/random-quality")
+    public ResponseEntity<GameSearchResponse> getRandomQualityByGenre(
+            @RequestParam String genre,
+            @RequestParam(defaultValue = "7.0") java.math.BigDecimal minRating,
+            @RequestParam(defaultValue = "10") @Min(0) int minVotes,
+            @RequestParam(defaultValue = "100") @Min(1) @Max(200) int limit) {
+        return ResponseEntity.ok(gameService.getRandomQualityByGenre(genre, minRating, minVotes, limit));
+    }
+
     @GetMapping("/genres")
     public ResponseEntity<Map<String, List<String>>> getGenres() {
         return ResponseEntity.ok(Map.of("genres", gameService.getGenres()));
     }
 
     @GetMapping("/platforms")
-    public ResponseEntity<Map<String, List<String>>> getPlatforms() {
-        return ResponseEntity.ok(Map.of("platforms", gameService.getPlatforms()));
+    public ResponseEntity<PlatformsResponse> getPlatforms() {
+        return ResponseEntity.ok(gameService.getPlatformGroups());
     }
 
     @GetMapping("/by-franchise/{name}")
@@ -96,5 +124,10 @@ public class GameController {
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
             @RequestParam(required = false) @Min(1) Integer excludeIgdbId) {
         return ResponseEntity.ok(gameService.getByCollection(name, limit, excludeIgdbId));
+    }
+
+    @GetMapping("/{igdbId}/editions")
+    public ResponseEntity<List<GameResponse>> getEditionsOf(@PathVariable @Min(1) Integer igdbId) {
+        return ResponseEntity.ok(gameService.getEditionsOf(igdbId));
     }
 }

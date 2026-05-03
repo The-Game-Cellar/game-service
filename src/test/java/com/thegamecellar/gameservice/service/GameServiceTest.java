@@ -20,7 +20,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -34,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -206,6 +210,9 @@ class GameServiceTest {
 
     @Test
     void shouldReturnEmptyResultForUnknownMood() {
+        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
         GameSearchResponse result = gameService.searchByMood("nonexistentmood", 0, 20);
 
         assertThat(result.getGames()).isEmpty();
@@ -215,7 +222,8 @@ class GameServiceTest {
 
     @Test
     void shouldSearchCachedGamesByMood() {
-        when(gameRepository.findByTagNamesIn(anyList())).thenReturn(List.of(cachedGame));
+        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(cachedGame)));
 
         GameSearchResponse result = gameService.searchByMood("Story-driven", 0, 20);
 
@@ -227,7 +235,7 @@ class GameServiceTest {
     @Test
     void shouldPaginateSearchByMoodResults() {
         List<Game> games = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 3; i++) {
             Game g = Game.builder()
                     .id((long) i)
                     .igdbId(i)
@@ -239,13 +247,13 @@ class GameServiceTest {
                     .build();
             games.add(g);
         }
-        when(gameRepository.findByTagNamesIn(anyList())).thenReturn(games);
+        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(games, Pageable.ofSize(3), 5));
 
         GameSearchResponse page0 = gameService.searchByMood("Story-driven", 0, 3);
-        GameSearchResponse page1 = gameService.searchByMood("Story-driven", 1, 3);
 
         assertThat(page0.getGames()).hasSize(3);
-        assertThat(page1.getGames()).hasSize(2);
+        assertThat(page0.getTotalCount()).isEqualTo(5);
     }
 
     @Test
@@ -286,7 +294,58 @@ class GameServiceTest {
     }
 
     @Test
+    void shouldGroupPlatformsIntoBig4UmbrellasAndAlphabeticalOthers() {
+        Platform ps5 = new Platform("PlayStation 5");
+        Platform ps4 = new Platform("PlayStation 4");
+        Platform xboxOne = new Platform("Xbox One");
+        Platform switch_ = new Platform("Nintendo Switch");
+        Platform pc = new Platform("PC");
+        Platform atari = new Platform("Atari 2600");
+        Platform sega = new Platform("Sega Genesis");
+        when(platformRepository.findAll()).thenReturn(List.of(ps5, ps4, xboxOne, switch_, pc, atari, sega));
+
+        var resp = gameService.getPlatformGroups();
+
+        // Big-4 pin order: PC → PlayStation → Nintendo → Xbox.
+        assertThat(resp.groups()).extracting("label")
+                .containsExactly("PC", "PlayStation", "Nintendo", "Xbox");
+
+        var pcGroup = resp.groups().get(0);
+        assertThat(pcGroup.umbrella()).isFalse();
+        assertThat(pcGroup.platforms()).containsExactly("PC");
+
+        var ps = resp.groups().get(1);
+        assertThat(ps.umbrella()).isTrue();
+        assertThat(ps.platforms()).containsExactly("PlayStation 4", "PlayStation 5");
+
+        // Unrecognised platforms sort alphabetically into "others", umbrella members do not appear.
+        assertThat(resp.others()).containsExactly("Atari 2600", "Sega Genesis");
+    }
+
+    @Test
+    void shouldOrPlatformChildrenWhenSpecGetsCommaSeparatedUmbrella() {
+        Game ps4Game = Game.builder().id(1L).igdbId(101).name("Bloodborne")
+                .genres(new HashSet<>()).platforms(new HashSet<>())
+                .tags(new HashSet<>()).themes(new HashSet<>()).build();
+        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(ps4Game), Pageable.ofSize(20), 1));
+
+        // Comma list is the umbrella expansion sent by the new PlatformDropdown.
+        GameSearchResponse result = gameService.searchGames(
+                null, "PlayStation 4,PlayStation 5", null, null,
+                "-rating", 0, 20, false, "main", null, null);
+
+        // Spec accepts the multi-value filter without throwing; DB result short-circuits
+        // before IGDB fallback fires, so no platform-name normalisation is needed there.
+        assertThat(result.getGames()).hasSize(1);
+        verify(gameRepository).findAll(any(Specification.class), any(Pageable.class));
+        verifyNoInteractions(igdbApiClient);
+    }
+
+    @Test
     void shouldReturnSearchResultsFromIgdb() {
+        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
         when(igdbApiClient.searchGames("witcher", 20, 0)).thenReturn(List.of(igdbDto));
 
         GameSearchResponse result = gameService.searchGames("witcher", null, null, "-rating", 0, 20);
@@ -305,8 +364,8 @@ class GameServiceTest {
                     .tags(new HashSet<>()).themes(new HashSet<>())
                     .build());
         }
-        when(gameRepository.findByGenreName(eq("RPG"), any(Pageable.class))).thenReturn(cachedGames);
-        when(gameRepository.countByGenreName("RPG")).thenReturn(6L);
+        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(cachedGames, Pageable.ofSize(20), 6));
 
         GameSearchResponse result = gameService.searchGames(null, null, "RPG", "-rating", 0, 20);
 
@@ -316,22 +375,9 @@ class GameServiceTest {
     }
 
     @Test
-    void shouldServeBroadPoolWhenGenreCacheEmptyButDbHasGames() {
-        when(gameRepository.findByGenreName(eq("RPG"), any(Pageable.class))).thenReturn(List.of());
-        when(gameRepository.count()).thenReturn(1L);
-        when(gameRepository.findAll(any(Pageable.class)))
-                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(cachedGame)));
-
-        GameSearchResponse result = gameService.searchGames(null, null, "RPG", "-rating", 0, 20);
-
-        assertThat(result.getGames()).hasSize(1);
-        verifyNoInteractions(igdbApiClient);
-    }
-
-    @Test
-    void shouldFallThroughToIgdbWhenGenreCacheEmptyAndDbEmpty() {
-        when(gameRepository.findByGenreName(eq("RPG"), any(Pageable.class))).thenReturn(List.of());
-        when(gameRepository.count()).thenReturn(0L);
+    void shouldFallThroughToIgdbWhenSpecQueryEmpty() {
+        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
         when(igdbApiClient.searchByGenre("RPG", 20, 0)).thenReturn(List.of(igdbDto));
 
         GameSearchResponse result = gameService.searchGames(null, null, "RPG", "-rating", 0, 20);
@@ -396,5 +442,156 @@ class GameServiceTest {
 
         assertThat(result.cached()).isEqualTo(1);
         verify(igdbApiClient).fetchNewReleases(500, 0);
+    }
+
+    @Test
+    void shouldCacheNewGamesDuringIgdbUpcomingSync() {
+        when(igdbApiClient.fetchUpcomingReleases(500, 0)).thenReturn(List.of(igdbDto));
+        when(gameCacheService.cacheIfAbsent(igdbDto)).thenReturn(true);
+
+        CatalogSyncResult result = gameService.syncIgdbUpcomingOffset(0, 500);
+
+        assertThat(result.cached()).isEqualTo(1);
+        verify(igdbApiClient).fetchUpcomingReleases(500, 0);
+    }
+
+    @Test
+    void shouldRefreshUpcomingRowFromIgdb() {
+        when(gameRepository.findByIgdbId(1942)).thenReturn(Optional.of(cachedGame));
+        when(igdbApiClient.fetchGameById(1942)).thenReturn(igdbDto);
+
+        boolean refreshed = gameService.refreshUpcomingRow(1942);
+
+        assertThat(refreshed).isTrue();
+        verify(gameCacheService).refreshUpcomingGame(cachedGame, igdbDto);
+    }
+
+    @Test
+    void shouldReturnFalseWhenRefreshUpcomingRowMissesDb() {
+        when(gameRepository.findByIgdbId(9999)).thenReturn(Optional.empty());
+
+        boolean refreshed = gameService.refreshUpcomingRow(9999);
+
+        assertThat(refreshed).isFalse();
+        verifyNoInteractions(igdbApiClient);
+    }
+
+    @Test
+    void getUpcomingReturnsEmptyWhenPoolEmpty() {
+        when(gameRepository.findUpcoming(anyLong(), anyLong())).thenReturn(List.of());
+
+        List<GameResponse> result = gameService.getUpcoming(List.of(), 90, 10, java.util.Set.of());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getUpcomingPlatformFilterRoutesToPlatformQuery() {
+        Game upcoming = upcomingGame(7777, "Far Future Game", 100);
+        when(gameRepository.findUpcomingByPlatforms(anyLong(), anyLong(), anyList()))
+                .thenReturn(List.of(upcoming));
+
+        List<GameResponse> result = gameService.getUpcoming(List.of("PC"), 90, 5, java.util.Set.of());
+
+        assertThat(result).hasSize(1);
+        verify(gameRepository).findUpcomingByPlatforms(anyLong(), anyLong(), eq(List.of("pc")));
+        verify(gameRepository, never()).findUpcoming(anyLong(), anyLong());
+    }
+
+    @Test
+    void getUpcomingDeduplicatesAcrossPlatformJoins() {
+        Game g = upcomingGame(7777, "Multi-Platform Title", 100);
+        when(gameRepository.findUpcomingByPlatforms(anyLong(), anyLong(), anyList()))
+                .thenReturn(List.of(g, g, g));
+
+        List<GameResponse> result = gameService.getUpcoming(List.of("PC", "PlayStation 5"), 90, 5, java.util.Set.of());
+
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void getUpcomingHonoursLimitWhenPoolLarger() {
+        List<Game> pool = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            pool.add(upcomingGame(2000 + i, "Game " + i, 50));
+        }
+        when(gameRepository.findUpcoming(anyLong(), anyLong())).thenReturn(pool);
+
+        List<GameResponse> result = gameService.getUpcoming(List.of(), 90, 5, java.util.Set.of());
+
+        assertThat(result).hasSize(5);
+    }
+
+    @Test
+    void getUpcomingFallsBackToUniformWhenAllHypesAreZeroOrNull() {
+        List<Game> pool = List.of(
+                upcomingGame(3001, "A", null),
+                upcomingGame(3002, "B", 0),
+                upcomingGame(3003, "C", null)
+        );
+        when(gameRepository.findUpcoming(anyLong(), anyLong())).thenReturn(pool);
+
+        List<GameResponse> result = gameService.getUpcoming(List.of(), 90, 3, java.util.Set.of());
+
+        assertThat(result).hasSize(3);
+    }
+
+    @Test
+    void getUpcomingZeroLimitReturnsEmpty() {
+        when(gameRepository.findUpcoming(anyLong(), anyLong())).thenReturn(List.of(upcomingGame(4001, "X", 100)));
+
+        List<GameResponse> result = gameService.getUpcoming(List.of(), 90, 0, java.util.Set.of());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getUpcomingExcludesOwnedIdsBeforeSampling() {
+        Game owned = upcomingGame(5001, "Already Owned", 100);
+        Game fresh = upcomingGame(5002, "Not Yet Owned", 50);
+        when(gameRepository.findUpcoming(anyLong(), anyLong())).thenReturn(List.of(owned, fresh));
+
+        List<GameResponse> result = gameService.getUpcoming(List.of(), 90, 5, java.util.Set.of(5001));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getIgdbId()).isEqualTo(5002);
+    }
+
+    @Test
+    void getUpcomingPlatformNamesDelegatesToRepository() {
+        when(gameRepository.findDistinctUpcomingPlatformNames(anyLong()))
+                .thenReturn(List.of("Nintendo Switch", "PC", "PlayStation 5"));
+
+        List<String> names = gameService.getUpcomingPlatformNames();
+
+        assertThat(names).containsExactly("Nintendo Switch", "PC", "PlayStation 5");
+    }
+
+    @Test
+    void findUpcomingIgdbIdsDelegatesToRepository() {
+        when(gameRepository.findUpcomingIgdbIds(anyLong())).thenReturn(List.of(11, 22, 33));
+
+        List<Integer> ids = gameService.findUpcomingIgdbIds();
+
+        assertThat(ids).containsExactly(11, 22, 33);
+    }
+
+    private Game upcomingGame(int igdbId, String name, Integer hypes) {
+        long futureEpoch = java.time.Instant.now().getEpochSecond() + 30L * 24 * 3600;
+        return Game.builder()
+                .id((long) igdbId)
+                .igdbId(igdbId)
+                .name(name)
+                .firstReleaseDate(futureEpoch)
+                .hypes(hypes)
+                .genres(new HashSet<>())
+                .platforms(new HashSet<>())
+                .tags(new HashSet<>())
+                .themes(new HashSet<>())
+                .gameModes(new HashSet<>())
+                .playerPerspectives(new HashSet<>())
+                .franchises(new HashSet<>())
+                .collections(new HashSet<>())
+                .build();
     }
 }

@@ -1,0 +1,852 @@
+# Curated tag allowlist for The Game Cellar recommendation engine.
+# Tags not on this list are dropped at ingest in GameCacheService.resolveTags.
+# Normalization at filter time: lowercase, trim, collapse internal whitespace,
+# strip dashes, strip trailing plural "s" (>4 chars). So "Souls-Like" / "souls like"
+# / "souls-likes" / "soulslike" all collapse to "souls like" and match the same entry.
+# One tag per line. Comments via "#". Blank lines OK.
+
+# ─────────────────────────────────────────────
+# Sub-genres
+# ─────────────────────────────────────────────
+action-adventure
+roguelike
+roguelite
+action roguelike
+action roguelite
+metroidvania
+jrpg
+crpg
+srpg
+arpg
+action-rpg
+turn-based rpg
+tactical rpg
+party-based rpg
+dungeon crawler
+dungeon crawling
+tower defense
+bullet hell
+bullet heaven
+shmup
+shoot 'em up
+twin stick
+walking simulator
+interactive fiction
+text adventure
+visual novel
+kinetic novel
+dating sim
+dating simulation
+otome
+eroge
+yuri
+yaoi
+boys love
+josei
+harem
+hidden object
+clicker
+idle game
+incremental game
+deck-building
+deckbuilder
+roguelike deckbuilder
+autobattler
+auto battler
+city builder
+colony simulator
+life simulation
+business simulator
+job simulator
+farming simulator
+flight simulator
+combat flight simulator
+train simulator
+vehicle simulation
+space simulation
+racing simulator
+arcade racers
+combat racing
+kart racing
+endless runner
+brawler
+boomer shooter
+arena shooter
+top down shooter
+extraction shooter
+zombie shooter
+survival shooter
+squad based shooter
+arcade shooter
+horizontal shooter
+movement shooter
+looter shooter
+rail shooter
+space shooter
+2d platformer
+3d platformer
+puzzle platformer
+precision platforming
+mascot platformer
+action platformer
+combat-based platformer
+physics-based platformer
+side-scrolling
+souls-like
+immersive sim
+survival horror
+first person horror
+mascot horror
+surreal horror
+gothic horror
+cozy horror
+extraction horror
+analog horror
+psychological horror
+narrative adventure
+graphic adventure
+escape room
+escape game
+2d fighting
+3d fighter
+platform fighting
+spectacle fighter
+stylish action
+beat 'em up
+run and gun
+rhythm game
+match 3
+sokoban
+nonograms
+picross
+sudoku
+solitaire
+mahjong
+poker
+chess
+chess puzzle
+trading card game
+collectible card game
+card battler
+card based combat
+brick breaker
+breakout
+block puzzle
+block matching
+tile matching
+word puzzle
+word game
+crossword puzzles
+logic puzzle
+physics puzzles
+environmental puzzles
+jigsaw puzzle
+jumping puzzle
+grid-based puzzles
+choose your own adventure
+fmv
+interactive movie
+god game
+real time tactics
+real-time combat
+pausable real time combat
+turn-based combat
+turn-based tactics
+tactical turn-based combat
+turn based strategy
+grand strategy
+space strategy
+wargame
+moba
+multiplayer online battle arena
+zelda-like
+foddian
+kaizo
+mascot sports
+gacha
+traditional roguelike
+mystery dungeon
+horde survival
+
+# ─────────────────────────────────────────────
+# Mechanics
+# ─────────────────────────────────────────────
+crafting
+base building
+construction
+resource management
+resource gathering
+inventory management
+loot
+loot boxes
+permadeath
+procedural generation
+randomly generated maps
+randomly generated dungeons
+random level generation
+random encounter
+randomizer
+moral decisions
+choices matter
+choice and consequence
+meaningful choices
+multiple endings
+multiple storylines
+multiple routes
+branching storyline
+branching paths
+branching narrative
+dialogue trees
+dialogue choice
+dynamic narrative
+non-linear storytelling
+linear gameplay
+new game plus
+boss fight
+boss rush
+multi-phase boss
+recurring boss
+optional boss
+playable boss
+transforming boss
+boss assistance
+escort mission
+sneaking mission
+side quests
+upgradable equipment
+upgradeable weapons
+weapon modification
+weapons swap
+upgradeable vehicles
+vehicle customization
+spaceship customization
+character customization
+customizable characters
+character creation
+character development
+character growth
+multiple playable characters
+multiple protagonists
+on-the-fly character switching
+recruitable characters
+playable enemy
+class-based
+class change
+skill tree
+skill points in game
+leveling up
+level cap
+level scaling
+level editor
+power-ups
+mining
+fishing
+hunting
+foraging
+farming
+gardening
+cooking
+cooking simulation
+alchemy
+shopping
+trading
+diplomacy
+negotiation
+investigation
+hacking
+lock picking
+sailing
+flight
+driving
+swimming
+climbing
+parkour
+acrobatics
+gliding
+sprinting mechanics
+wall jump
+grapple
+teleportation
+warping
+dimension travel
+time travel
+time manipulation
+time rewind
+time loop
+time paradox
+time trials
+time attack
+time management
+time limit
+slow-motion
+bullet time
+gravity control
+anti-gravity racing
+physics
+physics-based
+physics manipulation
+ragdoll physics
+destructible environment
+interactive environments
+destruction
+weather
+seasons
+day/night cycle
+fast paced
+camera control
+fixed camera
+over the shoulder
+top-down
+isometric
+first-person platforming
+second person perspective
+multiple gameplay perspectives
+verticality
+vertical platforming
+backtracking
+sequence breaking
+exploration
+space exploration
+underwater gameplay
+hiding
+stealth
+stealth kill
+shadow stealth
+parrying
+counter system
+combo
+finishing move
+special attacks
+strategic dismemberment
+gore system
+hand-to-hand combat
+melee combat
+swordplay
+archery
+bow and arrow
+sniping
+quick time event
+throwing weapons
+dual wielding
+two-handed weapons
+suppressive fire
+splash damage
+damage over time
+heal over time
+status effects
+poisoning
+burning
+fire manipulation
+earth manipulation
+cryokinesis
+telekinesis
+levitation
+invisibility
+shape-shifting
+transformation
+possession
+mind control
+hallucination
+illusion
+necromancy
+conjuration
+spellcaster
+black magic
+white magic
+magic
+mana
+runes
+rituals
+artifacts
+treasure hunt
+collectibles
+collectathon
+unlockables
+adjustable difficulty
+difficulty level
+dynamic difficulty
+challenging
+difficult
+hardcore
+casual
+endless mode
+survival mode
+survival management
+death match
+team deathmatch
+capture the flag
+king of the hill
+horde
+wave attack
+swarming enemies
+tournament
+ranked match
+matchmaking
+asymmetric gameplay
+asymmetric co-op
+competitive co-op
+local multiplayer
+split-screen multiplayer
+shared screen
+couch co-op
+local co-op
+online co-op
+online multiplayer
+online pvp
+drop-in drop-out
+hot-seat
+party-based
+party-based combat
+party system
+squad
+squad tactics
+squad based
+team-based
+mod support
+total conversion
+graphics overhaul
+user generated content
+content editor
+photo mode
+speedrun
+score attack
+maze
+hexagon tiles
+hex grid
+grid-based movement
+grid-based
+tower reveals map
+fog of war
+secret area
+hidden secrets
+new protagonist in sequel
+spiritual successor
+breaking the fourth wall
+self-referential humor
+metagame
+unreliable narrator
+post-credits plot twist
+plot twist
+flashback
+foreshadowing
+dream sequence
+parallel worlds
+alternate reality
+ancient curse
+chosen one
+power of friendship
+hero turned evil
+villain turned good
+good vs evil
+order and chaos
+rivaling factions
+liberation
+resistance
+revenge
+redemption
+heroic sacrifice
+canonical death
+photography
+drawing
+painting
+music creation
+typing
+programming
+brain training
+training mode
+buddy system
+a.i. companion
+animal companions
+horse riding
+dinosaur riding
+breeding
+monster capturing
+creature collector
+creature compendium
+animal petting
+pets
+virtual pet
+dress-up
+fashion
+decoration
+interior design
+fitness
+sandbox
+open world
+explorable world
+semi open world
+overworld
+world map
+interconnected world
+persistent world
+floating island
+
+# ─────────────────────────────────────────────
+# Theme / Setting
+# ─────────────────────────────────────────────
+post-apocalyptic
+zombie apocalypse
+nuclear fallout
+nuclear war
+radiation
+dystopian
+utopian
+cyberpunk
+steampunk
+dieselpunk
+solarpunk
+biopunk
+science-fantasy
+sci-fi
+space combat
+space battle
+space station
+space mining
+space ship
+spaceship
+alien invasion
+alien protagonist
+alien abduction
+ufo
+mars
+moon
+planet jumping
+asteroids
+galactic empire
+galactic civil war
+dark fantasy
+high fantasy
+low fantasy
+sword & sorcery
+gothic
+lovecraftian
+cosmic horror
+eldritch horror
+mythology
+greek mythology
+norse mythology
+japanese mythology
+slavic folklore
+folklore
+fairytale
+gods
+demons
+demon hunter
+devil
+hell
+heaven
+angels
+undead
+zombies
+vampire
+vampire hunter
+werewolf
+ghosts
+yokai
+witches
+wizards
+mummy
+skeletons
+dragons
+giants
+trolls
+ogres
+goblins
+orcs
+elves
+dwarves
+gnome
+fairy
+slender man
+the backrooms
+liminal space
+creepypasta
+banshee
+basilisks
+centaurs
+yeti
+kaiju
+giant monsters
+giant insects
+sea monster
+serial killer
+medieval
+victorian
+feudal japan
+historical japan
+ancient rome
+roman empire
+ancient egypt
+mayan
+the crusades
+prehistoric
+caveman
+dinosaurs
+historical
+alternate history
+modern military
+modern warfare
+futuristic
+futuristic warfare
+cold war
+world war i
+world war ii
+vietnam war
+civil war
+guerilla warfare
+naval warfare
+submarine
+siege warfare
+soldier
+special forces
+super soldier
+mercenary
+samurai
+ninja
+knights
+paladins
+barbarians
+warriors
+gladiators
+vikings
+yakuza
+mafia
+organized crime
+crime
+crime fighting
+murder
+murder mystery
+robbery
+heist
+kidnapping
+hostages
+torture
+cannibalism
+terrorists
+counter-terrorists
+nazis
+spy
+espionage
+secret agent
+detective
+private detective
+noir
+film noir
+political thriller
+psychological thriller
+political simulation
+politics
+conspiracy
+corruption
+totalitarianism
+fascism
+communism
+capitalism
+anarchism
+monarchy
+royalty
+propaganda
+religion
+christianity
+islam
+buddhism
+satanism
+atheism
+cult
+philosophical
+wild west
+prison
+hospital
+mansion
+museum
+castle
+restaurant
+tavern
+school
+high school
+factory
+sewer
+graveyard
+cave
+forest
+jungle
+desert
+ocean
+beach
+underwater
+underground
+village
+amusement park
+casino
+haunted house
+nightmare
+dreamlike
+psychedelic
+surreal
+weird
+psychological
+horror
+body horror
+jump scare moment
+spooky
+scary
+creepy
+dark
+darkness
+dark humor
+dark comedy
+dark fantasy
+dark ambient
+isolation
+insanity
+amnesia
+memory loss
+disorientation
+paranormal
+supernatural
+occult
+science
+artificial intelligence
+robots
+robot protagonist
+mecha
+mech
+cyborg
+android
+cybernetics
+biotechnology
+hologram
+augmented reality
+virtual reality experience
+mixed reality
+internet culture reference
+parody
+satire
+comedy
+slice of life
+coming of age
+romance
+love triangle
+sex work
+fan service
+sexual content
+nudity
+adult content
+mature
+nsfw
+furry
+transgender
+queer
+lgbtq
+lesbian
+yandere
+tomboy
+magical girl
+
+# ─────────────────────────────────────────────
+# Tone / Mood
+# ─────────────────────────────────────────────
+atmospheric
+chill
+relaxing
+cozy
+wholesome
+cute
+colorful
+beautiful
+nostalgia
+emotional
+melancholic
+funny
+silly
+humor
+quirky
+intense
+slow-paced
+competitive
+cooperative
+story rich
+story driven
+narrative-driven
+lore rich
+violent
+extreme violence
+bloody
+gore
+brutal
+gritty
+realism
+realistic
+immersive
+cinematic
+dramatic
+suspense
+mystery
+trippy
+philosophical
+thought-provoking
+experimental
+artistic
+stylized
+unique art style
+classic
+retro
+deliberately retro
+short
+
+# ─────────────────────────────────────────────
+# Visual Style
+# ─────────────────────────────────────────────
+pixel art
+8-bit
+16-bit
+1bit
+voxel
+low-poly
+2d
+3d
+2.5d
+hand-drawn
+hand-painted
+ascii
+vector graphics
+wireframe graphics
+monochrome
+minimalist
+abstract
+cartoony
+anime
+manga
+chibi
+photorealistic
+crt filter
+ps1 inspired
+neon
+claymation
+no hud
+tank controls
+
+# ─────────────────────────────────────────────
+# Multiplayer
+# ─────────────────────────────────────────────
+co-op
+massively multiplayer
+mmorpg
+moba
+battle royale
+deathmatch
+arena
+free for all
+horde mode
+pvp
+pve
+pvpve
+player vs player
+player vs environment
+guild
+clan
+tournament
+leaderboard
+social deduction
+multiplayer fps
+multiplayer lan

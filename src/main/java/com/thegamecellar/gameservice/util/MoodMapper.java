@@ -26,7 +26,7 @@ public class MoodMapper {
         // Exploration
         TAG_TO_MOODS.put("exploration",           List.of("Exploration"));
         TAG_TO_MOODS.put("open world",            List.of("Exploration", "Epic"));
-        TAG_TO_MOODS.put("sandbox",               List.of("Exploration", "Creative"));
+        TAG_TO_MOODS.put("sandbox",               List.of("Sandbox", "Creative", "Exploration"));
         TAG_TO_MOODS.put("walking simulator",     List.of("Exploration", "Emotional"));
 
         // Intense
@@ -115,8 +115,19 @@ public class MoodMapper {
         // Survival
         TAG_TO_MOODS.put("survival",              List.of("Survival"));
         TAG_TO_MOODS.put("post apocalyptic",      List.of("Survival", "Dark/Gritty"));
-        TAG_TO_MOODS.put("roguelike",             List.of("Survival"));
-        TAG_TO_MOODS.put("roguelite",             List.of("Survival"));
+
+        // Roguelike (run-based progression, often with permadeath)
+        TAG_TO_MOODS.put("roguelike",             List.of("Roguelike", "Survival"));
+        TAG_TO_MOODS.put("roguelite",             List.of("Roguelike", "Survival"));
+        TAG_TO_MOODS.put("permadeath",            List.of("Roguelike", "Survival"));
+        TAG_TO_MOODS.put("procedural generation", List.of("Roguelike"));
+        TAG_TO_MOODS.put("deck building",         List.of("Tactical", "Roguelike"));
+
+        // Sandbox (open creative play, non-linear systems)
+        TAG_TO_MOODS.put("open ended",            List.of("Sandbox"));
+        TAG_TO_MOODS.put("freeform",              List.of("Sandbox", "Creative"));
+        TAG_TO_MOODS.put("physics based",         List.of("Sandbox"));
+        TAG_TO_MOODS.put("voxel",                 List.of("Sandbox", "Creative"));
 
         // Nostalgic
         TAG_TO_MOODS.put("pixel graphics",        List.of("Nostalgic"));
@@ -150,7 +161,7 @@ public class MoodMapper {
         THEME_TO_MOODS.put("Business",            List.of("Tactical", "Chill"));
         THEME_TO_MOODS.put("Drama",               List.of("Emotional", "Story-driven"));
         THEME_TO_MOODS.put("Non-fiction",         List.of("Meditative"));
-        THEME_TO_MOODS.put("Sandbox",             List.of("Creative", "Exploration"));
+        THEME_TO_MOODS.put("Sandbox",             List.of("Sandbox", "Creative", "Exploration"));
         THEME_TO_MOODS.put("Educational",         List.of("Meditative", "Creative"));
         THEME_TO_MOODS.put("Kids",                List.of("Cozy", "Humorous"));
         THEME_TO_MOODS.put("Open world",          List.of("Exploration", "Epic"));
@@ -170,8 +181,8 @@ public class MoodMapper {
         GENRE_TO_MOODS.put("Real Time Strategy (RTS)",       List.of("Tactical", "Competitive"));
         GENRE_TO_MOODS.put("Turn-based strategy (TBS)",      List.of("Tactical"));
         GENRE_TO_MOODS.put("Tactical",                       List.of("Tactical"));
-        GENRE_TO_MOODS.put("Simulation",                     List.of("Chill", "Cozy", "Creative"));
-        GENRE_TO_MOODS.put("Simulator",                      List.of("Chill", "Cozy", "Creative"));
+        GENRE_TO_MOODS.put("Simulation",                     List.of("Chill", "Cozy", "Creative", "Sandbox"));
+        GENRE_TO_MOODS.put("Simulator",                      List.of("Chill", "Cozy", "Creative", "Sandbox"));
         GENRE_TO_MOODS.put("Puzzle",                         List.of("Chill", "Meditative"));
         GENRE_TO_MOODS.put("Platformer",                     List.of("Fast-paced", "Nostalgic"));
         GENRE_TO_MOODS.put("Platform",                       List.of("Fast-paced", "Nostalgic"));

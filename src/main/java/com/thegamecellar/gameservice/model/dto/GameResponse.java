@@ -25,6 +25,10 @@ public class GameResponse {
     private String backgroundImage;
     private String coverImageUrl;
     private String released;
+    /** IGDB {@code first_release_date} as Unix epoch seconds — queryable canonical worldwide release. */
+    private Long firstReleaseDate;
+    /** IGDB {@code hypes} — anticipation count for upcoming titles. Null when IGDB has no hype signal. */
+    private Integer hypes;
     private String esrbRating;
 
     /** IGDB category enum (0=main_game, 1=dlc_addon, 2=expansion, etc.). */
@@ -62,6 +66,10 @@ public class GameResponse {
     public static class AgeRatingDTO {
         private Integer category;
         private Integer rating;
+        /** Human-readable rating body (e.g. "PEGI", "ESRB"). Null for unsupported bodies. */
+        private String body;
+        /** Human-readable rating label (e.g. "16", "M"). Null for unsupported bodies. */
+        private String label;
     }
 
     @Data
