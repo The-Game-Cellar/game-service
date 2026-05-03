@@ -27,7 +27,7 @@ class GameMapperTest {
         assertThat(entity.getIgdbId()).isEqualTo(1942);
         assertThat(entity.getName()).isEqualTo("The Witcher 3: Wild Hunt");
         assertThat(entity.getDescription()).isEqualTo("A story-driven RPG.");
-        assertThat(entity.getRating()).isEqualByComparingTo(new BigDecimal("4.70"));
+        assertThat(entity.getRating()).isEqualByComparingTo(new BigDecimal("9.40"));
         assertThat(entity.getCoverImageId()).isEqualTo("abc123");
         assertThat(entity.getReleased()).isNotNull();
     }

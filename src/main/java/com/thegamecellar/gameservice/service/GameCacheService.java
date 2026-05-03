@@ -10,6 +10,8 @@ import com.thegamecellar.gameservice.model.dto.igdb.IgdbScreenshotDto;
 import com.thegamecellar.gameservice.model.dto.igdb.IgdbVideoDto;
 import com.thegamecellar.gameservice.model.entity.*;
 import com.thegamecellar.gameservice.repository.*;
+import com.thegamecellar.gameservice.util.CuratedTagAllowlist;
+import com.thegamecellar.gameservice.util.DerivedGenreEngine;
 import com.thegamecellar.gameservice.util.GameMapper;
 import com.thegamecellar.gameservice.util.IgdbPlatformMapper;
 import lombok.RequiredArgsConstructor;
@@ -34,13 +36,13 @@ public class GameCacheService {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    /** REC17 — IGDB tag noise filter prefixes. Tags starting with these are dropped at ingest. */
+    /** IGDB tag noise filter prefixes. Tags starting with these are dropped at ingest. */
     private static final List<String> NOISE_TAG_PREFIXES = List.of(
             "released-on-", "released on ", "available-on-", "available on ",
             "exclusive-to-", "exclusive to "
     );
 
-    /** REC17 — minimum tag length. Below this is almost always noise. */
+    /** Minimum tag length. Below this is almost always noise. */
     private static final int TAG_MIN_LENGTH = 3;
 
     private final GameRepository gameRepository;
@@ -52,11 +54,13 @@ public class GameCacheService {
     private final PlayerPerspectiveRepository playerPerspectiveRepository;
     private final FranchiseRepository franchiseRepository;
     private final GameCollectionRepository gameCollectionRepository;
+    private final CuratedTagAllowlist curatedTagAllowlist;
+    private final DerivedGenreEngine derivedGenreEngine;
 
     /**
      * Caches the game if not already present. Each call runs in its own
      * transaction so a concurrent insert collision only rolls back this one
-     * game, not the caller's broader transaction (GS15).
+     * game, not the caller's broader transaction.
      *
      * @return true if the game was newly inserted, false if it already existed
      */
@@ -64,9 +68,8 @@ public class GameCacheService {
     public boolean cacheIfAbsent(IgdbGameDto dto) {
         Optional<Game> existing = gameRepository.findByIgdbId(dto.getId());
         if (existing.isPresent()) {
-            // GS1: when search/popular returns a game we cached earlier with
-            // partial data, use the fresh DTO to backfill — no extra IGDB
-            // roundtrip needed.
+            // When search/popular returns a game we cached earlier with partial
+            // data, use the fresh DTO to backfill — no extra IGDB roundtrip needed.
             Game game = existing.get();
             if (isStale(game)) {
                 try {
@@ -90,6 +93,7 @@ public class GameCacheService {
     public Game cacheGame(IgdbGameDto dto) {
         Game game = GameMapper.toEntity(dto);
         applyAssociations(game, dto);
+        applyDerivedGenres(game);
         applyOwnedJsonFields(game, dto);
         return gameRepository.save(game);
     }
@@ -143,6 +147,12 @@ public class GameCacheService {
         if (game.getRatingCount() == null) {
             game.setRatingCount(dto.getAggregatedRatingCount());
         }
+        if (game.getFirstReleaseDate() == null && dto.getFirstReleaseDate() != null) {
+            game.setFirstReleaseDate(dto.getFirstReleaseDate());
+        }
+        if (game.getHypes() == null && dto.getHypes() != null) {
+            game.setHypes(dto.getHypes());
+        }
         // JSON-as-TEXT fields — fill if currently null
         if (game.getScreenshots() == null) game.setScreenshots(serializeScreenshots(dto));
         if (game.getVideos() == null) game.setVideos(serializeVideos(dto));
@@ -152,6 +162,32 @@ public class GameCacheService {
         if (game.getAgeRatings() == null) game.setAgeRatings(serializeAgeRatings(dto));
         if (game.getReleaseDates() == null) game.setReleaseDates(serializeReleaseDates(dto));
         if (game.getMultiplayerModes() == null) game.setMultiplayerModes(serializeMultiplayerModes(dto));
+        applyDerivedGenres(game);
+        return gameRepository.save(game);
+    }
+
+    /**
+     * Force-overwrite refresh for volatile upcoming-release fields. Used by the daily
+     * worker pass over rows whose canonical {@code first_release_date} is in the future —
+     * dates slip, hype counts move daily, per-platform release plans change, so these
+     * fields are re-set unconditionally rather than the fill-if-null behaviour of
+     * {@link #refreshStaleGame}.
+     */
+    @Transactional
+    public Game refreshUpcomingGame(Game game, IgdbGameDto dto) {
+        game.setFirstReleaseDate(dto.getFirstReleaseDate());
+        game.setHypes(dto.getHypes());
+        if (dto.getFirstReleaseDate() != null) {
+            game.setReleased(java.time.Instant.ofEpochSecond(dto.getFirstReleaseDate())
+                    .atZone(java.time.ZoneId.of("UTC"))
+                    .toLocalDate()
+                    .toString());
+        }
+        game.setReleaseDates(serializeReleaseDates(dto));
+        if (dto.getTotalRating() != null) {
+            game.setTotalRating(GameMapper.normalizeRating(dto.getTotalRating()));
+            game.setTotalRatingCount(dto.getTotalRatingCount());
+        }
         return gameRepository.save(game);
     }
 
@@ -174,6 +210,28 @@ public class GameCacheService {
     }
 
     // ── associations ──────────────────────────────────────────────────────────
+
+    /**
+     * Re-applies the derived-genre rule set to the game. Replace-pattern: removes any prior
+     * {@code source=DERIVED} entries from the join, then re-derives from the game's current
+     * tags + themes and adds the new set. Idempotent — re-running with the same rule set is
+     * a no-op. Called from both {@link #cacheGame} (new rows) and {@link #refreshStaleGame}
+     * (existing rows hitting the stale path) so derived genres stay in sync with the YAML
+     * regardless of how the game enters the cache.
+     */
+    void applyDerivedGenres(Game game) {
+        Set<String> tagNames = game.getTags().stream().map(Tag::getName).collect(java.util.stream.Collectors.toSet());
+        Set<String> themeNames = game.getThemes().stream().map(Theme::getName).collect(java.util.stream.Collectors.toSet());
+        Set<String> derivedNames = derivedGenreEngine.deriveGenres(tagNames, themeNames);
+
+        game.getGenres().removeIf(g -> "DERIVED".equals(g.getSource()));
+
+        for (String name : derivedNames) {
+            Genre genre = genreRepository.findByName(name)
+                    .orElseGet(() -> genreRepository.save(new Genre(name, "DERIVED")));
+            game.getGenres().add(genre);
+        }
+    }
 
     private void applyAssociations(Game game, IgdbGameDto dto) {
         game.setGenres(resolveGenres(dto));
@@ -224,7 +282,8 @@ public class GameCacheService {
         Set<Tag> result = new HashSet<>();
         for (var k : dto.getKeywords()) {
             String name = k.getName();
-            if (isNoiseTag(name)) continue; // REC17
+            if (isNoiseTag(name)) continue;
+            if (!curatedTagAllowlist.isAllowed(name)) continue;
             result.add(tagRepository.findByName(name)
                     .orElseGet(() -> tagRepository.save(new Tag(name))));
         }
@@ -232,15 +291,14 @@ public class GameCacheService {
     }
 
     /**
-     * REC17 — filter IGDB keyword noise at ingest. Drops:
+     * Filters IGDB keyword noise at ingest. Drops:
      * <ul>
      *   <li>null / blank</li>
      *   <li>shorter than {@link #TAG_MIN_LENGTH}</li>
      *   <li>platform-prefix tags ({@code released-on-steam}, {@code exclusive-to-pc} etc.)</li>
      * </ul>
-     * Frequency-based filtering (drop very common &gt; 50% / very rare &lt; 0.01%) is
-     * better done as a post-pass over the populated tag table — left as future
-     * work since the prefix + length filter already removes most of the noise.
+     * Allowlist enforcement runs as a second gate after this method — see
+     * {@link CuratedTagAllowlist} for the curated keep-set.
      */
     private boolean isNoiseTag(String name) {
         if (name == null) return true;

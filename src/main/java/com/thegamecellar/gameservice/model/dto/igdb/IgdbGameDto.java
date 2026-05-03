@@ -28,6 +28,8 @@ public class IgdbGameDto {
     @JsonProperty("first_release_date")
     private Long firstReleaseDate;
 
+    private Integer hypes;
+
     /** IGDB renamed {@code category} to {@code game_type} in v4. Same enum (0=main_game, 1=dlc_addon, ...). */
     @JsonProperty("game_type")
     private Integer category;

@@ -27,7 +27,7 @@ public class IgdbApiClient {
     private static final String IGDB_HOST = "api.igdb.com";
     private static final String FIELDS_GAME =
             "fields id,name,summary,storyline,aggregated_rating,aggregated_rating_count," +
-            "total_rating,total_rating_count,first_release_date,game_type," +
+            "total_rating,total_rating_count,first_release_date,game_type,hypes," +
             "parent_game.id,parent_game.name," +
             "cover.image_id,genres.name,platforms.name,themes.name,keywords.name," +
             "game_modes.name,player_perspectives.name,franchises.name,collections.name," +
@@ -60,11 +60,32 @@ public class IgdbApiClient {
         return results.get(0);
     }
 
+    /**
+     * Batched fetch by IGDB id list. Caller must keep the list ≤ 500 entries — IGDB caps
+     * single-query results at 500 and the service-side rate limit is per-call rather than
+     * per-row, so batching here cuts a 101k-row backfill from hours to minutes.
+     */
+    public List<IgdbGameDto> fetchGamesByIds(List<Integer> igdbIds) {
+        if (igdbIds == null || igdbIds.isEmpty()) return List.of();
+        String idList = igdbIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+        String query = FIELDS_GAME + " where id = (" + idList + "); limit " + igdbIds.size() + ";";
+        return queryGames(query);
+    }
+
     public List<IgdbGameDto> fetchNewReleases(int limit, int offset) {
         long now = Instant.now().getEpochSecond();
         String query = FIELDS_GAME +
                 " where first_release_date != null & first_release_date < " + now + ";" +
                 " sort first_release_date desc;" +
+                " limit " + limit + "; offset " + offset + ";";
+        return queryGames(query);
+    }
+
+    public List<IgdbGameDto> fetchUpcomingReleases(int limit, int offset) {
+        long now = Instant.now().getEpochSecond();
+        String query = FIELDS_GAME +
+                " where first_release_date != null & first_release_date > " + now + ";" +
+                " sort first_release_date asc;" +
                 " limit " + limit + "; offset " + offset + ";";
         return queryGames(query);
     }
@@ -102,18 +123,6 @@ public class IgdbApiClient {
         IgdbPlatformMapper.getIgdbId(platform)
                 .ifPresent(id -> query.append(" & platforms = (").append(id).append(")"));
         query.append("; limit ").append(limit).append("; offset ").append(offset).append(";");
-        return queryGames(query.toString());
-    }
-
-    public List<IgdbGameDto> fetchUpcomingGames(String platform, int limit) {
-        long now = Instant.now().getEpochSecond();
-        long oneYearLater = now + 365L * 24 * 3600;
-        StringBuilder query = new StringBuilder(FIELDS_GAME);
-        query.append(" where first_release_date > ").append(now)
-             .append(" & first_release_date < ").append(oneYearLater);
-        IgdbPlatformMapper.getIgdbId(platform)
-                .ifPresent(id -> query.append(" & platforms = (").append(id).append(")"));
-        query.append("; sort first_release_date asc; limit ").append(limit).append(";");
         return queryGames(query.toString());
     }
 

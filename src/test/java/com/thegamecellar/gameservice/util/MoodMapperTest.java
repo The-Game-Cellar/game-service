@@ -186,4 +186,56 @@ class MoodMapperTest {
         // Theme-exclusive moods that may not appear in TAG_TO_MOODS
         assertThat(moods).contains("Spooky");
     }
+
+    // Expanded mood vocabulary
+
+    @Test
+    void shouldMapRoguelikeTagToBothRoguelikeAndSurvival() {
+        // Run-based progression deserves its own mood signal but still implies survival pressure
+        List<String> moods = MoodMapper.getMoods(List.of("roguelike"), List.of(), List.of());
+
+        assertThat(moods).contains("Roguelike", "Survival");
+    }
+
+    @Test
+    void shouldMapPermadeathToRoguelike() {
+        List<String> moods = MoodMapper.getMoods(List.of("permadeath"), List.of(), List.of());
+
+        assertThat(moods).contains("Roguelike");
+    }
+
+    @Test
+    void shouldMapSandboxTagToSandboxMood() {
+        List<String> moods = MoodMapper.getMoods(List.of("sandbox"), List.of(), List.of());
+
+        assertThat(moods).contains("Sandbox", "Creative", "Exploration");
+    }
+
+    @Test
+    void shouldMapPhysicsBasedToSandbox() {
+        List<String> moods = MoodMapper.getMoods(List.of("physics based"), List.of(), List.of());
+
+        assertThat(moods).contains("Sandbox");
+    }
+
+    @Test
+    void shouldMapSandboxThemeToSandboxMood() {
+        List<String> moods = MoodMapper.getMoods(List.of(), List.of(), List.of("Sandbox"));
+
+        assertThat(moods).contains("Sandbox", "Creative", "Exploration");
+    }
+
+    @Test
+    void shouldFallBackSimulationGenreToSandbox() {
+        List<String> moods = MoodMapper.getMoods(List.of("unknowntag"), List.of("Simulation"), List.of());
+
+        assertThat(moods).contains("Sandbox");
+    }
+
+    @Test
+    void shouldIncludeNewMoodsInGetAllMoods() {
+        List<String> moods = MoodMapper.getAllMoods();
+
+        assertThat(moods).contains("Roguelike", "Sandbox");
+    }
 }

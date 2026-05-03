@@ -10,7 +10,9 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "games")
+@Table(name = "games", indexes = {
+        @Index(name = "idx_games_first_release_date", columnList = "first_release_date")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -34,15 +36,15 @@ public class Game {
     @Column(name = "storyline", columnDefinition = "TEXT")
     private String storyline;
 
-    /** Critic score (IGDB {@code aggregated_rating}) normalized to 0–5. */
-    @Column(name = "rating", precision = 3, scale = 2)
+    /** Critic score (IGDB {@code aggregated_rating}) normalized to 0–10. */
+    @Column(name = "rating", precision = 4, scale = 2)
     private BigDecimal rating;
 
     @Column(name = "rating_count")
     private Integer ratingCount;
 
-    /** User score (IGDB {@code total_rating}) normalized to 0–5. */
-    @Column(name = "total_rating", precision = 3, scale = 2)
+    /** User score (IGDB {@code total_rating}) normalized to 0–10. */
+    @Column(name = "total_rating", precision = 4, scale = 2)
     private BigDecimal totalRating;
 
     @Column(name = "total_rating_count")
@@ -56,6 +58,14 @@ public class Game {
 
     @Column(name = "released", length = 20)
     private String released;
+
+    /** IGDB {@code first_release_date} as Unix epoch seconds. Queryable column for upcoming-release range filters. Nullable when IGDB has no canonical worldwide date yet (TBA). */
+    @Column(name = "first_release_date")
+    private Long firstReleaseDate;
+
+    /** IGDB {@code hypes} — count of users who marked the game as anticipated. Used as a weight signal for upcoming-release ordering. Null on rows IGDB has no hype data for. */
+    @Column(name = "hypes")
+    private Integer hypes;
 
     @Column(name = "esrb_rating", length = 50)
     private String esrbRating;

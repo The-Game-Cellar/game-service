@@ -60,20 +60,28 @@ public class GameMapper {
         }
 
         if (dto.getFirstReleaseDate() != null) {
+            game.setFirstReleaseDate(dto.getFirstReleaseDate());
             game.setReleased(Instant.ofEpochSecond(dto.getFirstReleaseDate())
                     .atZone(ZoneId.of("UTC"))
                     .toLocalDate()
                     .toString());
         }
 
+        game.setHypes(dto.getHypes());
+
         game.setDevelopers(extractDevelopers(dto));
 
         return game;
     }
 
-    /** IGDB scale is 0–100; normalize to 0–5 with 2-decimal precision. */
+    /**
+     * IGDB scale is 0–100; normalize to 0–10 with 2-decimal precision. The 0–10 scale matches
+     * what igdb.com displays publicly (their site divides the API's 0–100 by 10) and aligns
+     * with the user-rating scale stored on {@code user_games.rating} (Integer 0–10), so a
+     * user's own rating and the IGDB rating displayed alongside it now share the same axis.
+     */
     public static BigDecimal normalizeRating(double igdbRating) {
-        return BigDecimal.valueOf(igdbRating / 20.0).setScale(2, RoundingMode.HALF_UP);
+        return BigDecimal.valueOf(igdbRating / 10.0).setScale(2, RoundingMode.HALF_UP);
     }
 
     public static String extractDevelopers(IgdbGameDto dto) {
@@ -117,10 +125,16 @@ public class GameMapper {
         List<GameResponse.AgeRatingDTO> ageRatings = readJson(game.getAgeRatings(),
                 new TypeReference<List<Map<String, Object>>>() {})
                 .stream()
-                .map(row -> GameResponse.AgeRatingDTO.builder()
-                        .category(asInteger(row.get("category")))
-                        .rating(asInteger(row.get("rating")))
-                        .build())
+                .map(row -> {
+                    Integer cat = asInteger(row.get("category"));
+                    Integer rat = asInteger(row.get("rating"));
+                    return GameResponse.AgeRatingDTO.builder()
+                            .category(cat)
+                            .rating(rat)
+                            .body(AgeRatingMapper.body(cat))
+                            .label(AgeRatingMapper.label(cat, rat))
+                            .build();
+                })
                 .toList();
 
         List<GameResponse.ReleaseDateDTO> releaseDates = readJson(game.getReleaseDates(),
@@ -161,6 +175,8 @@ public class GameMapper {
                 .backgroundImage(game.getBackgroundImage() != null ? game.getBackgroundImage() : coverImageUrl)
                 .coverImageUrl(coverImageUrl)
                 .released(game.getReleased())
+                .firstReleaseDate(game.getFirstReleaseDate())
+                .hypes(game.getHypes())
                 .esrbRating(game.getEsrbRating())
                 .category(game.getCategory())
                 .parentGameId(game.getParentGameId())
@@ -231,7 +247,12 @@ public class GameMapper {
 
         List<GameResponse.AgeRatingDTO> ageRatings = dto.getAgeRatings() == null ? Collections.emptyList()
                 : dto.getAgeRatings().stream()
-                        .map(a -> GameResponse.AgeRatingDTO.builder().category(a.getCategory()).rating(a.getRating()).build())
+                        .map(a -> GameResponse.AgeRatingDTO.builder()
+                                .category(a.getCategory())
+                                .rating(a.getRating())
+                                .body(AgeRatingMapper.body(a.getCategory()))
+                                .label(AgeRatingMapper.label(a.getCategory(), a.getRating()))
+                                .build())
                         .toList();
 
         List<GameResponse.ReleaseDateDTO> releaseDates = dto.getReleaseDates() == null ? Collections.emptyList()
@@ -275,6 +296,8 @@ public class GameMapper {
                 .backgroundImage(coverImageUrl)
                 .coverImageUrl(coverImageUrl)
                 .released(released)
+                .firstReleaseDate(dto.getFirstReleaseDate())
+                .hypes(dto.getHypes())
                 .category(dto.getCategory())
                 .parentGameId(parentGameId)
                 .parentGameName(parentGameName)

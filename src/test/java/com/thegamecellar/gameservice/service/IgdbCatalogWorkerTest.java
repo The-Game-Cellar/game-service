@@ -36,7 +36,43 @@ class IgdbCatalogWorkerTest {
         ReflectionTestUtils.setField(worker, "discoveryLimit", 500);
         ReflectionTestUtils.setField(worker, "discoveryPages", 3);
         ReflectionTestUtils.setField(worker, "newReleasesPages", 2);
+        ReflectionTestUtils.setField(worker, "upcomingPages", 2);
         ReflectionTestUtils.setField(worker, "rateLimitDelayMs", 0L);
+        lenient().when(gameService.syncIgdbUpcomingOffset(anyInt(), anyInt()))
+                .thenReturn(CatalogSyncResult.empty());
+        lenient().when(gameService.findUpcomingIgdbIds()).thenReturn(java.util.List.of());
+    }
+
+    @Test
+    void shouldRunUpcomingDiscoveryAndRefreshAfterMainPhases() {
+        when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY)).thenReturn(Optional.empty());
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(new CatalogSyncResult(500, 5));
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(CatalogSyncResult.empty());
+        when(gameService.syncIgdbUpcomingOffset(anyInt(), anyInt()))
+                .thenReturn(new CatalogSyncResult(500, 3))
+                .thenReturn(new CatalogSyncResult(500, 1));
+        when(gameService.findUpcomingIgdbIds()).thenReturn(java.util.List.of(101, 202, 303));
+        when(gameService.refreshUpcomingRow(anyInt())).thenReturn(true);
+
+        worker.syncCatalog();
+
+        verify(gameService, times(2)).syncIgdbUpcomingOffset(anyInt(), eq(500));
+        verify(gameService).findUpcomingIgdbIds();
+        verify(gameService).refreshUpcomingRow(101);
+        verify(gameService).refreshUpcomingRow(202);
+        verify(gameService).refreshUpcomingRow(303);
+    }
+
+    @Test
+    void shouldStopUpcomingDiscoveryEarlyWhenIgdbReturnsEmpty() {
+        when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY)).thenReturn(Optional.empty());
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(new CatalogSyncResult(500, 5));
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(CatalogSyncResult.empty());
+        when(gameService.syncIgdbUpcomingOffset(anyInt(), anyInt())).thenReturn(CatalogSyncResult.empty());
+
+        worker.syncCatalog();
+
+        verify(gameService, times(1)).syncIgdbUpcomingOffset(anyInt(), eq(500));
     }
 
     @Test

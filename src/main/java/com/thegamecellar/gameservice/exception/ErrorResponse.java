@@ -6,7 +6,7 @@ import org.slf4j.MDC;
 import java.time.Instant;
 
 /**
- * Standardized error response shape used across all services (INFRA2).
+ * Standardized error response shape used across all services.
  * <p>
  * Fields:
  * <ul>
