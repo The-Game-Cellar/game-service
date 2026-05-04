@@ -209,54 +209,6 @@ class GameServiceTest {
     }
 
     @Test
-    void shouldReturnEmptyResultForUnknownMood() {
-        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of()));
-
-        GameSearchResponse result = gameService.searchByMood("nonexistentmood", 0, 20);
-
-        assertThat(result.getGames()).isEmpty();
-        assertThat(result.getTotalCount()).isZero();
-        verifyNoInteractions(igdbApiClient);
-    }
-
-    @Test
-    void shouldSearchCachedGamesByMood() {
-        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(cachedGame)));
-
-        GameSearchResponse result = gameService.searchByMood("Story-driven", 0, 20);
-
-        assertThat(result.getGames()).hasSize(1);
-        assertThat(result.getGames().get(0).getName()).isEqualTo("The Witcher 3: Wild Hunt");
-        verifyNoInteractions(igdbApiClient);
-    }
-
-    @Test
-    void shouldPaginateSearchByMoodResults() {
-        List<Game> games = new ArrayList<>();
-        for (int i = 0; i < 3; i++) {
-            Game g = Game.builder()
-                    .id((long) i)
-                    .igdbId(i)
-                    .name("Game " + i)
-                    .genres(new HashSet<>())
-                    .platforms(new HashSet<>())
-                    .tags(new HashSet<>())
-                    .themes(new HashSet<>())
-                    .build();
-            games.add(g);
-        }
-        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(games, Pageable.ofSize(3), 5));
-
-        GameSearchResponse page0 = gameService.searchByMood("Story-driven", 0, 3);
-
-        assertThat(page0.getGames()).hasSize(3);
-        assertThat(page0.getTotalCount()).isEqualTo(5);
-    }
-
-    @Test
     void shouldReturnCachedGenresIfAvailable() {
         when(genreRepository.findAllNames()).thenReturn(List.of("Action", "RPG"));
 
@@ -332,7 +284,7 @@ class GameServiceTest {
 
         // Comma list is the umbrella expansion sent by the new PlatformDropdown.
         GameSearchResponse result = gameService.searchGames(
-                null, "PlayStation 4,PlayStation 5", null, null,
+                null, "PlayStation 4,PlayStation 5", null,
                 "-rating", 0, 20, false, "main", null, null);
 
         // Spec accepts the multi-value filter without throwing; DB result short-circuits

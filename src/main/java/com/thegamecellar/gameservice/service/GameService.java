@@ -11,7 +11,6 @@ import com.thegamecellar.gameservice.repository.GameRepository;
 import com.thegamecellar.gameservice.repository.GenreRepository;
 import com.thegamecellar.gameservice.repository.PlatformRepository;
 import com.thegamecellar.gameservice.util.GameMapper;
-import com.thegamecellar.gameservice.util.MoodMapper;
 import com.thegamecellar.gameservice.util.PlatformGroups;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
@@ -109,35 +108,25 @@ public class GameService {
     }
 
     @Transactional
-    public GameSearchResponse searchByMood(String mood, int page, int pageSize) {
-        return searchGames(null, null, null, mood, "-rating", page, pageSize, true, "main", null, null);
-    }
-
-    @Transactional
     public GameSearchResponse searchGames(String query, String platform, String genre, String ordering, int page, int pageSize) {
-        return searchGames(query, platform, genre, null, ordering, page, pageSize, false, "main", null, null);
-    }
-
-    @Transactional
-    public GameSearchResponse searchGames(String query, String platform, String genre, String ordering, int page, int pageSize, boolean dbOnly) {
-        return searchGames(query, platform, genre, null, ordering, page, pageSize, dbOnly, "main", null, null);
+        return searchGames(query, platform, genre, ordering, page, pageSize, false, "main", null, null);
     }
 
     /**
      * Unified DB-first search. Builds a Spring Data {@link Specification} from every filter
      * the caller provides, AND-ing them together so any combination of (query, platform, genre,
-     * mood, gameMode, perspective) works correctly. The previous implementation fanned out
+     * gameMode, perspective) works correctly. The previous implementation fanned out
      * across multiple branched repository methods and ended up applying only a subset of the
      * filters whenever two or more were active. Falls back to IGDB only when the DB returns
      * zero matches AND {@code dbOnly} is false.
      */
     @Transactional
-    public GameSearchResponse searchGames(String query, String platform, String genre, String mood,
+    public GameSearchResponse searchGames(String query, String platform, String genre,
                                             String ordering, int page, int pageSize, boolean dbOnly,
                                             String gameType, String gameMode, String perspective) {
         PageRequest pageable = PageRequest.of(page, pageSize, sortFromOrdering(ordering));
 
-        Specification<Game> spec = buildSearchSpec(query, platform, genre, mood, gameType, gameMode, perspective);
+        Specification<Game> spec = buildSearchSpec(query, platform, genre, gameType, gameMode, perspective);
         Page<Game> result = gameRepository.findAll(spec, pageable);
 
         if (result.getTotalElements() > 0) {
@@ -150,11 +139,11 @@ public class GameService {
         }
 
         // IGDB's search endpoint can only filter by query / genre / platform. If the user
-        // narrowed by mood, gameMode, perspective, or asked for variants-only, IGDB would
+        // narrowed by gameMode, perspective, or asked for variants-only, IGDB would
         // return generic results that ignore those filters — i.e. misleading fallback. In
         // that case we return empty to let the UI render an honest "no matches" state rather
         // than a fake-broad list.
-        boolean igdbCanMatchFilters = !isSet(mood) && !isSet(gameMode) && !isSet(perspective)
+        boolean igdbCanMatchFilters = !isSet(gameMode) && !isSet(perspective)
                 && (gameType == null || "main".equalsIgnoreCase(gameType));
 
         if (dbOnly || !igdbCanMatchFilters) {
@@ -212,7 +201,7 @@ public class GameService {
         return s != null && !s.isBlank();
     }
 
-    private static Specification<Game> buildSearchSpec(String query, String platform, String genre, String mood,
+    private static Specification<Game> buildSearchSpec(String query, String platform, String genre,
                                                          String gameType, String gameMode, String perspective) {
         return (root, cq, cb) -> {
             cq.distinct(true);
@@ -267,18 +256,6 @@ public class GameService {
             if (isSet(perspective)) {
                 var perspJoin = root.join("playerPerspectives", JoinType.INNER);
                 preds.add(cb.equal(cb.lower(perspJoin.get("name")), perspective.toLowerCase()));
-            }
-
-            if (isSet(mood)) {
-                List<String> tags = MoodMapper.getTagsForMood(mood);
-                if (!tags.isEmpty()) {
-                    var tagJoin = root.join("tags", JoinType.INNER);
-                    List<String> lowered = tags.stream().map(String::toLowerCase).toList();
-                    preds.add(cb.lower(tagJoin.get("name")).in(lowered));
-                } else {
-                    // Mood produced no tags — return empty rather than ignoring the filter.
-                    preds.add(cb.disjunction());
-                }
             }
 
             return cb.and(preds.toArray(new Predicate[0]));

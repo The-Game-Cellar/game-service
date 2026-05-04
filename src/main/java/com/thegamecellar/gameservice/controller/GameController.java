@@ -4,7 +4,6 @@ import com.thegamecellar.gameservice.model.dto.GameResponse;
 import com.thegamecellar.gameservice.model.dto.GameSearchResponse;
 import com.thegamecellar.gameservice.model.dto.PlatformsResponse;
 import com.thegamecellar.gameservice.service.GameService;
-import com.thegamecellar.gameservice.util.MoodMapper;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
@@ -34,7 +33,6 @@ public class GameController {
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String platform,
             @RequestParam(required = false) String genre,
-            @RequestParam(required = false) String mood,
             @RequestParam(required = false) String gameMode,
             @RequestParam(required = false) String perspective,
             @RequestParam(defaultValue = "main") @Pattern(regexp = "main|variant|all") String gameType,
@@ -42,12 +40,7 @@ public class GameController {
             @RequestParam(defaultValue = "0") @Min(0) @Max(500) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize,
             @RequestParam(defaultValue = "false") boolean dbOnly) {
-        return ResponseEntity.ok(gameService.searchGames(query, platform, genre, mood, ordering, page, pageSize, dbOnly, gameType, gameMode, perspective));
-    }
-
-    @GetMapping("/moods")
-    public ResponseEntity<Map<String, List<String>>> getMoods() {
-        return ResponseEntity.ok(Map.of("moods", MoodMapper.getAllMoods()));
+        return ResponseEntity.ok(gameService.searchGames(query, platform, genre, ordering, page, pageSize, dbOnly, gameType, gameMode, perspective));
     }
 
     @GetMapping("/popular")

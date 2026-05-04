@@ -76,7 +76,6 @@ class GameMapperTest {
         assertThat(response.getThemes()).containsExactlyInAnyOrder("Fantasy");
         assertThat(response.getDevelopers()).containsExactly("CD PROJEKT RED");
         assertThat(response.getCoverImageUrl()).contains("abc123");
-        assertThat(response.getMoods()).contains("Story-driven");
     }
 
     @Test
@@ -125,7 +124,6 @@ class GameMapperTest {
         assertThat(response.getTags()).isEmpty();
         assertThat(response.getThemes()).isEmpty();
         assertThat(response.getDevelopers()).isEmpty();
-        assertThat(response.getMoods()).isEmpty();
         assertThat(response.getCoverImageUrl()).isNull();
     }
 
