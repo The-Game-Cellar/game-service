@@ -45,7 +45,6 @@ public class GameResponse {
     private List<String> playerPerspectives;
     private List<String> franchises;
     private List<String> collections;
-    private List<String> moods;
 
     /** Full IGDB CDN URLs for screenshots, ready to be used as {@code <img src>}. */
     private List<String> screenshotUrls;

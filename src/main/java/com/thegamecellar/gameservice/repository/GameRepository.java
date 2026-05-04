@@ -15,7 +15,7 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
     boolean existsByIgdbId(Integer igdbId);
 
     // ── Main-game default filter ──────────────────────────────────────────────
-    // Every browse / discovery / mood / random / genre query is filtered to
+    // Every browse / discovery / random / genre query is filtered to
     // category IN (0, 8) (main game OR remake) OR category IS NULL by default.
     // Remakes are full standalone games and surface in default browse alongside
     // main games. Variants (DLC, Expansion, Bundle, Remaster, GOTY edition, etc.)
