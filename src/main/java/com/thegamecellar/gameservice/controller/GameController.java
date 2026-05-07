@@ -2,6 +2,7 @@ package com.thegamecellar.gameservice.controller;
 
 import com.thegamecellar.gameservice.model.dto.GameResponse;
 import com.thegamecellar.gameservice.model.dto.GameSearchResponse;
+import com.thegamecellar.gameservice.model.dto.GenresResponse;
 import com.thegamecellar.gameservice.model.dto.PlatformsResponse;
 import com.thegamecellar.gameservice.service.GameService;
 import jakarta.validation.constraints.Max;
@@ -94,8 +95,8 @@ public class GameController {
     }
 
     @GetMapping("/genres")
-    public ResponseEntity<Map<String, List<String>>> getGenres() {
-        return ResponseEntity.ok(Map.of("genres", gameService.getGenres()));
+    public ResponseEntity<GenresResponse> getGenres() {
+        return ResponseEntity.ok(new GenresResponse(gameService.getGenres()));
     }
 
     @GetMapping("/platforms")
