@@ -4,6 +4,7 @@ import com.thegamecellar.gameservice.model.dto.GameResponse;
 import com.thegamecellar.gameservice.model.dto.GameSearchResponse;
 import com.thegamecellar.gameservice.model.dto.GenresResponse;
 import com.thegamecellar.gameservice.model.dto.PlatformsResponse;
+import com.thegamecellar.gameservice.model.dto.PopularTagsResponse;
 import com.thegamecellar.gameservice.service.GameService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -51,6 +52,8 @@ public class GameController {
         return ResponseEntity.ok(gameService.getPopularGames(platform, page));
     }
 
+    private static final int EXCLUDE_IDS_MAX = 100;
+
     @GetMapping("/upcoming")
     public ResponseEntity<GameSearchResponse> getUpcomingGames(
             @RequestParam(required = false) String platform,
@@ -62,7 +65,12 @@ public class GameController {
                 : List.of(platform.split(","));
         java.util.Set<Integer> exclude = java.util.Set.of();
         if (excludeIds != null && !excludeIds.isBlank()) {
-            exclude = java.util.Arrays.stream(excludeIds.split(","))
+            String[] parts = excludeIds.split(",");
+            if (parts.length > EXCLUDE_IDS_MAX) {
+                throw new IllegalArgumentException(
+                        "excludeIds exceeds maximum of " + EXCLUDE_IDS_MAX + " entries");
+            }
+            exclude = java.util.Arrays.stream(parts)
                     .map(String::trim)
                     .filter(s -> !s.isEmpty())
                     .map(s -> {
@@ -97,6 +105,12 @@ public class GameController {
     @GetMapping("/genres")
     public ResponseEntity<GenresResponse> getGenres() {
         return ResponseEntity.ok(new GenresResponse(gameService.getGenres()));
+    }
+
+    @GetMapping("/tags/popular")
+    public ResponseEntity<PopularTagsResponse> getPopularTags(
+            @RequestParam(defaultValue = "50") @Min(1) @Max(100) int limit) {
+        return ResponseEntity.ok(new PopularTagsResponse(gameService.getPopularTags(limit)));
     }
 
     @GetMapping("/platforms")

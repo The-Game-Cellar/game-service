@@ -5,9 +5,13 @@ import com.thegamecellar.gameservice.model.dto.igdb.IgdbTokenResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.Instant;
 
@@ -50,13 +54,18 @@ public class IgdbTokenService {
 
     private synchronized void refresh() {
         if (!needsRefresh()) return;
-        String url = UriComponentsBuilder.fromUriString(TOKEN_URL)
-                .queryParam("client_id", clientId)
-                .queryParam("client_secret", clientSecret)
-                .queryParam("grant_type", "client_credentials")
-                .build().toUriString();
+        // Credentials go in the form-encoded body, not the URL. Query-string credentials
+        // are recorded by HTTP server access logs and error traces by default; body content
+        // is not. RFC 6749 §2.3.1 also recommends body or Basic auth over query string.
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("client_id", clientId);
+        form.add("client_secret", clientSecret);
+        form.add("grant_type", "client_credentials");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(form, headers);
         try {
-            IgdbTokenResponse response = restTemplate.postForObject(url, null, IgdbTokenResponse.class);
+            IgdbTokenResponse response = restTemplate.postForObject(TOKEN_URL, request, IgdbTokenResponse.class);
             if (response == null || response.getAccessToken() == null) {
                 throw new IgdbApiException("Twitch token response was null or missing access_token");
             }

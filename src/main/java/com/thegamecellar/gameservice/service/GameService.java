@@ -10,6 +10,7 @@ import com.thegamecellar.gameservice.model.entity.Platform;
 import com.thegamecellar.gameservice.repository.GameRepository;
 import com.thegamecellar.gameservice.repository.GenreRepository;
 import com.thegamecellar.gameservice.repository.PlatformRepository;
+import com.thegamecellar.gameservice.repository.TagRepository;
 import com.thegamecellar.gameservice.util.GameMapper;
 import com.thegamecellar.gameservice.util.PlatformGroups;
 import jakarta.persistence.criteria.JoinType;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -35,8 +37,35 @@ public class GameService {
     private final GameRepository gameRepository;
     private final GenreRepository genreRepository;
     private final PlatformRepository platformRepository;
+    private final TagRepository tagRepository;
     private final GameCacheService gameCacheService;
     private final IgdbApiClient igdbApiClient;
+
+    /** Curated junk-tag exclusion list applied before returning the chip-wall tag list. */
+    private static final Set<String> JUNK_TAG_BLOCKLIST = Set.of(
+            "2.5d", "3d", "8-bit", "a.i. companion", "abstract", "action-adventure",
+            "adjustable difficulty", "anime", "artificial intelligence", "bloody",
+            "bow and arrow", "breaking the fourth wall", "cartoony", "casual",
+            "character creation", "character customization", "choices matter", "climbing",
+            "collectibles", "colorful", "creepy", "customizable characters", "cute",
+            "dark", "dark humor", "darkness", "dating simulation", "day/night cycle",
+            "deliberately retro", "destructible environment", "dialogue trees", "difficult",
+            "difficulty level", "dual wielding", "emotional", "eroge", "experimental",
+            "extreme violence", "fairy", "fast paced", "flight", "forest", "funny",
+            "good vs evil", "gore", "grapple", "grid-based movement", "immersive",
+            "leaderboard", "low-poly", "magic", "magical girl", "mahjong", "mecha",
+            "mercenary", "metroidvania", "minimalist", "modern military", "moral decisions",
+            "multiple endings", "multiple protagonists", "murder", "nsfw", "nudity",
+            "otome", "parody", "party system", "permadeath", "physics", "plot twist",
+            "poisoning", "pve", "ragdoll physics", "real-time combat", "realism",
+            "rivaling factions", "roguelike", "roguelite", "sexual content",
+            "sexual themes", "shared screen", "shmup", "shopping", "short", "side quests",
+            "skeletons", "speedrun", "sprinting mechanics", "stylized", "supernatural",
+            "survival horror", "swimming", "tactical turn-based combat", "teleportation",
+            "throwing weapons", "time limit", "turn-based combat", "turn-based rpg",
+            "undead", "underwater", "underwater gameplay", "unlockables",
+            "upgradeable weapons", "violent", "wholesome", "world map"
+    );
 
     @Transactional
     public GameResponse getGameById(Integer igdbId) {
@@ -335,6 +364,12 @@ public class GameService {
         }
         return igdbApiClient.fetchGenres().stream()
                 .map(g -> g.getName())
+                .toList();
+    }
+
+    public List<String> getPopularTags(int limit) {
+        return tagRepository.findPopularExcludingBlocklist(JUNK_TAG_BLOCKLIST, limit).stream()
+                .map(row -> (String) row[0])
                 .toList();
     }
 
