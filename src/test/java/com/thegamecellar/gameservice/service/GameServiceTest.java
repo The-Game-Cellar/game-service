@@ -13,6 +13,7 @@ import com.thegamecellar.gameservice.model.entity.Tag;
 import com.thegamecellar.gameservice.repository.GameRepository;
 import com.thegamecellar.gameservice.repository.GenreRepository;
 import com.thegamecellar.gameservice.repository.PlatformRepository;
+import com.thegamecellar.gameservice.repository.TagRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,6 +53,9 @@ class GameServiceTest {
 
     @Mock
     private PlatformRepository platformRepository;
+
+    @Mock
+    private TagRepository tagRepository;
 
     @Mock
     private GameCacheService gameCacheService;
@@ -526,6 +530,41 @@ class GameServiceTest {
         List<Integer> ids = gameService.findUpcomingIgdbIds();
 
         assertThat(ids).containsExactly(11, 22, 33);
+    }
+
+    @Test
+    void getPopularTags_returnsCatalogTagsSortedByFrequency() {
+        when(tagRepository.findPopularExcludingBlocklist(any(), eq(50))).thenReturn(List.of(
+                new Object[]{"pixel art", 3184L},
+                new Object[]{"exploration", 2742L},
+                new Object[]{"atmospheric", 2315L}
+        ));
+
+        List<String> result = gameService.getPopularTags(50);
+
+        assertThat(result).containsExactly("pixel art", "exploration", "atmospheric");
+    }
+
+    @Test
+    void getPopularTags_passesJunkBlocklistToRepository() {
+        when(tagRepository.findPopularExcludingBlocklist(any(), anyInt())).thenReturn(List.of());
+
+        gameService.getPopularTags(50);
+
+        ArgumentCaptor<java.util.Collection<String>> captor = ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(tagRepository).findPopularExcludingBlocklist(captor.capture(), eq(50));
+        java.util.Collection<String> blocklist = captor.getValue();
+        // Spot-check that the blocklist actually carries the curated entries — guards against a
+        // future refactor accidentally passing an empty set to the repository.
+        assertThat(blocklist).contains("nudity", "anime", "casual", "roguelike", "3d", "violent");
+        assertThat(blocklist.size()).isGreaterThan(100);
+    }
+
+    @Test
+    void getPopularTags_returnsEmptyListWhenCatalogHasNoTags() {
+        when(tagRepository.findPopularExcludingBlocklist(any(), anyInt())).thenReturn(List.of());
+
+        assertThat(gameService.getPopularTags(50)).isEmpty();
     }
 
     private Game upcomingGame(int igdbId, String name, Integer hypes) {
