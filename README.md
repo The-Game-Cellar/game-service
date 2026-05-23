@@ -63,6 +63,8 @@ Plus the join tables: `game_genres`, `game_tags`, `game_themes`, `game_platforms
 
 A small set of columns are stored as JSON-as-`TEXT` (`screenshots`, `videos`, `dlc_ids`, `expansion_ids`, `similar_game_ids`, `age_ratings`, `release_dates`, `multiplayer_modes`) since nothing queries into them; they round-trip through the mapper.
 
+`platforms` carries three curation columns (`is_preference_eligible BOOLEAN`, `category VARCHAR(20)`, `display_order INT`) used by `/api/v1/platforms/catalog` to drive the Preferences picker. Curation is manual via Flyway / SQL.
+
 ## API Endpoints
 
 ### Public catalog (JWT required)
@@ -76,6 +78,7 @@ A small set of columns are stored as JSON-as-`TEXT` (`screenshots`, `videos`, `d
 | GET    | `/api/v1/games/random`                | Random games from the cache. `limit` max 100.                                                            |
 | GET    | `/api/v1/games/genres`                | All genres (cache first, IGDB fallback).                                                                 |
 | GET    | `/api/v1/games/platforms`             | All platform names from the local catalog.                                                               |
+| GET    | `/api/v1/platforms/catalog`           | Curated platform catalog (`is_preference_eligible = TRUE`) with manufacturer category + display order. Drives the Preferences picker. |
 | GET    | `/api/v1/games/tags/popular?limit=N`  | Top-N catalog tags by `game_tags` occurrence, with a curated junk blocklist applied at SQL level.        |
 
 ### Admin
