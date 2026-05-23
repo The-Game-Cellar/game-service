@@ -25,10 +25,10 @@ public class TagPruneService {
     @Transactional
     public Map<String, Object> pruneToAllowlist() {
         if (!allowlist.isEnabled()) {
-            log.warn("Tag prune skipped — allowlist not loaded. Add curated-tags.txt to game-service resources.");
+            log.warn("Tag prune skipped: allowlist not loaded. Add curated-tags.txt to game-service resources.");
             return Map.of(
                     "skipped", true,
-                    "reason", "Curated allowlist not loaded — see CuratedTagAllowlist startup logs"
+                    "reason", "Curated allowlist not loaded (see CuratedTagAllowlist startup logs)"
             );
         }
 
@@ -52,7 +52,7 @@ public class TagPruneService {
             }
         }
 
-        log.info("Tag prune complete — examined={} kept={} dropped={} joinRowsDeleted={}",
+        log.info("Tag prune complete: examined={} kept={} dropped={} joinRowsDeleted={}",
                 examined, kept, dropped, joinRowsDeleted);
 
         return Map.of(

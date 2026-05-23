@@ -1,10 +1,10 @@
-# Derived custom genres — rule-based promotion of tags / themes to first-class genres.
+# Derived custom genres: rule-based promotion of tags / themes to first-class genres.
 #
 # Each top-level key is the genre name. Each rule has one or more match blocks:
-#   tagsAny:    list of tags — rule fires if game has ANY of them
-#   tagsAll:    list of tags — rule fires if game has ALL of them
-#   themesAny:  list of themes — rule fires if game has ANY of them
-#   themesAll:  list of themes — rule fires if game has ALL of them
+#   tagsAny:    list of tags, rule fires if game has ANY of them
+#   tagsAll:    list of tags, rule fires if game has ALL of them
+#   themesAny:  list of themes, rule fires if game has ANY of them
+#   themesAll:  list of themes, rule fires if game has ALL of them
 #
 # Logic: blocks combine with OR (rule fires if at least one block matches). Inside
 # *All blocks all entries must be present. Multiple rules can fire on the same game.
@@ -14,7 +14,7 @@
 # tokens > 4 chars), so surface-form variations like "Souls-Like" / "souls like" /
 # "souls likes" all collapse to the same key.
 #
-# Rule names must NOT collide with existing IGDB genre names — startup fails fast
+# Rule names must NOT collide with existing IGDB genre names. Startup fails fast
 # if a collision is detected.
 #
 # Workflow: edit this file, restart game-service, run
@@ -34,7 +34,7 @@ Metroidvania:
   tagsAny: [metroidvania]
 
 # No Soulslike rule. IGDB does not tag canonical Souls titles (Dark Souls, Sekiro,
-# Bloodborne, Elden Ring) with "souls-like" / "soulslike" keywords — only successors
+# Bloodborne, Elden Ring) with "souls-like" / "soulslike" keywords; only successors
 # to that style carry those tags. There is no reliable signal in IGDB's vocabulary
 # to derive a Soulslike genre, and a manually-curated allowlist would have to grow
 # every release. Souls titles already classify under existing IGDB genres + tags
@@ -46,7 +46,7 @@ Survival Horror:
             creepypasta, analog horror, surreal horror, mascot horror,
             cozy horror, extraction horror, first person horror]
 
-# Horror is intentionally additive with Survival Horror — a game with both signals matches
+# Horror is intentionally additive with Survival Horror: a game with both signals matches
 # both rules. Survival Horror is the narrower tag-based subset, Horror is the broad theme.
 # A horror-heavy library will see two rows in Recommendations: a wide Horror row + a focused
 # Survival Horror row. Standalone horror games (without specific sub-tags) only match Horror.

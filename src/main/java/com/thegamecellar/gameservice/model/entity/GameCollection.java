@@ -6,7 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * IGDB "collections" — groups of related games. Named {@code GameCollection} (not
+ * IGDB "collections": groups of related games. Named {@code GameCollection} (not
  * {@code Collection}) to avoid collision with {@link java.util.Collection}.
  */
 @Entity

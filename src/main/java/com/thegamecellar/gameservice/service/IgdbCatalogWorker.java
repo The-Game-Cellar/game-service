@@ -95,7 +95,7 @@ public class IgdbCatalogWorker {
 
         int nextOffset = earlyExit ? 0 : offset;
         saveLastDiscoveryOffset(nextOffset);
-        log.info("Main discovery complete — {} new games, next offset={}", newGamesTotal, nextOffset);
+        log.info("Main discovery complete: {} new games, next offset={}", newGamesTotal, nextOffset);
     }
 
     private void runNewReleasesDiscovery() {
@@ -110,7 +110,7 @@ public class IgdbCatalogWorker {
                 log.error("New releases discovery failed at offset {}: {}", offset, e.getMessage());
             }
         }
-        log.info("New releases discovery complete — {} new games", newGames);
+        log.info("New releases discovery complete: {} new games", newGames);
     }
 
     private void runUpcomingReleasesDiscovery() {
@@ -126,14 +126,14 @@ public class IgdbCatalogWorker {
                 log.error("Upcoming releases discovery failed at offset {}: {}", offset, e.getMessage());
             }
         }
-        log.info("Upcoming releases discovery complete — {} new games", newGames);
+        log.info("Upcoming releases discovery complete: {} new games", newGames);
     }
 
     /**
      * Daily refresh over every cached game whose canonical first_release_date is in the
      * future. Force-overwrites the volatile fields (date, hypes, per-platform releases,
      * totalRating) so date slips and hype movement propagate within 24h. Sized for the
-     * upcoming subset only, which is typically ~1-3k games even on a 100k catalog — well
+     * upcoming subset only, which is typically ~1-3k games even on a 100k catalog, well
      * inside the daily IGDB rate budget.
      */
     private void runUpcomingRefresh() {
@@ -147,7 +147,7 @@ public class IgdbCatalogWorker {
                 log.error("Upcoming refresh failed for igdbId={}: {}", igdbId, e.getMessage());
             }
         }
-        log.info("Upcoming refresh complete — {}/{} rows updated", refreshed, upcomingIds.size());
+        log.info("Upcoming refresh complete: {}/{} rows updated", refreshed, upcomingIds.size());
     }
 
     private void rateLimitSleep() {

@@ -21,7 +21,7 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
     // main games. Variants (DLC, Expansion, Bundle, Remaster, GOTY edition, etc.)
     // are excluded so recommendations and Explore default-view never surface
     // them. The /search endpoint accepts an explicit `gameType=variant` override
-    // which routes to the *Variants counterparts below — used only by the
+    // which routes to the *Variants counterparts below, used only by the
     // Explore variants toggle.
 
     @Query("SELECT DISTINCT g FROM Game g JOIN g.tags t WHERE LOWER(t.name) IN (:tagNames) AND (g.category IN (0, 8) OR g.category IS NULL)")
@@ -45,7 +45,7 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
     /**
      * Random sample across all main-game rows in a genre that pass a quality bar
      * (combined critic+user rating + minimum vote count). Backs the Recommendation
-     * Service candidate-pool generation — a single uniform random pick over the
+     * Service candidate-pool generation: a single uniform random pick over the
      * full quality subset, no page math, no NULL-tail, no pagination bias.
      */
     @Query(value = """
@@ -128,6 +128,11 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
     @Query("SELECT g FROM Game g WHERE g.id IN (SELECT DISTINCT g2.id FROM Game g2 JOIN g2.collections c WHERE LOWER(c.name) = LOWER(:collectionName)) AND g.category IN (0, 8) AND g.parentGameId IS NULL")
     List<Game> findByCollectionName(@Param("collectionName") String collectionName, Pageable pageable);
 
+    /** Match against the comma-separated {@code developers} TEXT column.
+     *  Wraps both sides with commas so {@code "Capcom"} matches {@code "Capcom"} but not {@code "Capcom Vancouver"}. */
+    @Query("SELECT g FROM Game g WHERE LOWER(CONCAT(',', g.developers, ',')) LIKE LOWER(CONCAT('%,', :developerName, ',%')) AND g.category IN (0, 8) AND g.parentGameId IS NULL")
+    List<Game> findByDeveloperName(@Param("developerName") String developerName, Pageable pageable);
+
     @Query("SELECT g FROM Game g WHERE g.id <> :parentDbId " +
             "AND (g.parentGameId = :parentIgdbId " +
             "     OR g.name LIKE CONCAT(:parentName, ' - %') " +
@@ -161,7 +166,7 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
                                          @Param("toEpochSeconds") long toEpochSeconds,
                                          @Param("platformNamesLower") List<String> platformNamesLower);
 
-    /** Used by the daily worker refresh pass — pulls every game whose canonical date is in the future, regardless of platform or horizon. */
+    /** Used by the daily worker refresh pass. Pulls every game whose canonical date is in the future, regardless of platform or horizon. */
     @Query("SELECT g.igdbId FROM Game g WHERE g.firstReleaseDate IS NOT NULL AND g.firstReleaseDate > :nowEpochSeconds")
     List<Integer> findUpcomingIgdbIds(@Param("nowEpochSeconds") long nowEpochSeconds);
 
@@ -177,7 +182,7 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
             "ORDER BY p.name")
     List<String> findDistinctUpcomingPlatformNames(@Param("nowEpochSeconds") long nowEpochSeconds);
 
-    /** Used by the one-shot backfill admin endpoint — paginates through every cached game so first_release_date + hypes can be repopulated from IGDB. */
+    /** Used by the one-shot backfill admin endpoint. Paginates through every cached game so first_release_date + hypes can be repopulated from IGDB. */
     @Query(value = "SELECT g FROM Game g",
            countQuery = "SELECT COUNT(g) FROM Game g")
     org.springframework.data.domain.Page<Game> findAllForBackfill(Pageable pageable);

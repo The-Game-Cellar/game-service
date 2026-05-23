@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 /**
  * One-shot backfill that walks the entire {@code games} table page by page and re-applies the
  * derived-genre rule set to every cached row. Replace-pattern via
- * {@link GameCacheService#applyDerivedGenres(Game)} — any {@code source=DERIVED} rows that no
+ * {@link GameCacheService#applyDerivedGenres(Game)}; any {@code source=DERIVED} rows that no
  * longer match the current YAML are removed, and freshly-matching rules are added. Idempotent:
  * re-running with the same rule set is a no-op for every game.
  */
@@ -46,10 +46,10 @@ public class DerivedGenreBackfillService {
     @Transactional
     public Map<String, Object> backfill() {
         if (derivedGenreEngine.ruleCount() == 0) {
-            log.warn("Derived-genre backfill skipped — engine has no rules loaded.");
+            log.warn("Derived-genre backfill skipped: engine has no rules loaded.");
             return Map.of(
                     "skipped", true,
-                    "reason", "DerivedGenreEngine has no rules loaded — see startup logs"
+                    "reason", "DerivedGenreEngine has no rules loaded (see startup logs)"
             );
         }
 
@@ -93,7 +93,7 @@ public class DerivedGenreBackfillService {
             page++;
         }
 
-        log.info("Derived-genre backfill complete — examined={} updated={} derivedAdded={} derivedRemoved={}",
+        log.info("Derived-genre backfill complete: examined={} updated={} derivedAdded={} derivedRemoved={}",
                 examined, updated, derivedAdded, derivedRemoved);
 
         Map<String, Object> result = new LinkedHashMap<>();

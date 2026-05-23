@@ -10,11 +10,11 @@ import java.time.Instant;
  * <p>
  * Fields:
  * <ul>
- *   <li>{@code error} — short human-readable message</li>
- *   <li>{@code status} — HTTP status code</li>
- *   <li>{@code timestamp} — ISO-8601 instant the error was emitted</li>
- *   <li>{@code path} — original request URI (or {@code null} if unknown)</li>
- *   <li>{@code requestId} — value of MDC {@code requestId} for log correlation</li>
+ *   <li>{@code error}: short human-readable message</li>
+ *   <li>{@code status}: HTTP status code</li>
+ *   <li>{@code timestamp}: ISO-8601 instant the error was emitted</li>
+ *   <li>{@code path}: original request URI (or {@code null} if unknown)</li>
+ *   <li>{@code requestId}: value of MDC {@code requestId} for log correlation</li>
  * </ul>
  */
 public record ErrorResponse(

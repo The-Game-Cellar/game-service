@@ -15,14 +15,14 @@ import java.util.Map;
 /**
  * One-shot migration that doubles every cached {@code rating} and {@code total_rating} value
  * to convert the legacy 0–5 scale to the current 0–10 scale. Idempotent via a flag stored in
- * the {@code sync_state} table — re-running after a successful pass is a no-op.
+ * the {@code sync_state} table. Re-running after a successful pass is a no-op.
  *
  * <p><b>Operational note:</b> deployments that change the divisor in
  * {@link com.thegamecellar.gameservice.util.GameMapper#normalizeRating(double)} must run this
  * exactly once. Stop the IGDB worker before deploy ({@code IGDB_WORKER_ENABLED=false}) so no
  * new rows are written during the swap window, deploy, hit this endpoint, then re-enable the
  * worker. Without disabling the worker, a row freshly cached on the new divisor between deploy
- * and migration would get doubled incorrectly — the flag prevents a SECOND migration but does
+ * and migration would get doubled incorrectly; the flag prevents a SECOND migration but does
  * not protect a row that lands on the new scale before the migration touches it.
  */
 @Slf4j
@@ -45,13 +45,13 @@ public class RatingScaleMigrationService {
                 .map(s -> "true".equalsIgnoreCase(s.getStateValue()))
                 .orElse(false);
         if (alreadyMigrated) {
-            log.info("Rating-scale migration skipped — already marked complete in sync_state");
+            log.info("Rating-scale migration skipped: already marked complete in sync_state");
             result.put("skipped", true);
             result.put("reason", "Already migrated (sync_state flag '" + FLAG_KEY + "' = true)");
             return result;
         }
 
-        // Widen the column precision before doubling values — a row currently storing 5.00 on
+        // Widen the column precision before doubling values. A row currently storing 5.00 on
         // the legacy 0–5 scale must be able to hold 10.00 after migration. Hibernate's
         // ddl-auto: update does not always re-issue ALTER COLUMN TYPE for precision-only
         // changes, so we run it explicitly here. Postgres treats ALTER TYPE NUMERIC(4,2) on
@@ -71,7 +71,7 @@ public class RatingScaleMigrationService {
 
         syncStateRepository.save(new SyncState(FLAG_KEY, "true"));
 
-        log.info("Rating-scale migration complete — rating rows updated: {}, total_rating rows updated: {}",
+        log.info("Rating-scale migration complete: rating rows updated: {}, total_rating rows updated: {}",
                 ratingsUpdated, totalRatingsUpdated);
 
         result.put("skipped", false);

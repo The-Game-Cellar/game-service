@@ -100,7 +100,7 @@ class DerivedGenreBackfillServiceTest {
         Page<Game> page = new PageImpl<>(List.of(stable));
         when(gameRepository.findAll(any(Pageable.class))).thenReturn(page);
 
-        // applyDerivedGenres simulates idempotent re-application — replaces Action with Action.
+        // applyDerivedGenres simulates idempotent re-application; replaces Action with Action.
         org.mockito.stubbing.Answer<Void> apply = invocation -> {
             Game game = invocation.getArgument(0);
             game.getGenres().removeIf(g -> "DERIVED".equals(g.getSource()));

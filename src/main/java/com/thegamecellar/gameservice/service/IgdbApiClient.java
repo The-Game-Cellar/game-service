@@ -61,9 +61,9 @@ public class IgdbApiClient {
     }
 
     /**
-     * Batched fetch by IGDB id list. Caller must keep the list ≤ 500 entries — IGDB caps
+     * Batched fetch by IGDB id list. Caller must keep the list ≤ 500 entries (IGDB caps
      * single-query results at 500 and the service-side rate limit is per-call rather than
-     * per-row, so batching here cuts a 101k-row backfill from hours to minutes.
+     * per-row, so batching here cuts a 101k-row backfill from hours to minutes).
      */
     public List<IgdbGameDto> fetchGamesByIds(List<Integer> igdbIds) {
         if (igdbIds == null || igdbIds.isEmpty()) return List.of();

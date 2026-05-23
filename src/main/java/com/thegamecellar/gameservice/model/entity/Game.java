@@ -63,7 +63,7 @@ public class Game {
     @Column(name = "first_release_date")
     private Long firstReleaseDate;
 
-    /** IGDB {@code hypes} — count of users who marked the game as anticipated. Used as a weight signal for upcoming-release ordering. Null on rows IGDB has no hype data for. */
+    /** IGDB {@code hypes}. Count of users who marked the game as anticipated. Used as a weight signal for upcoming-release ordering. Null on rows IGDB has no hype data for. */
     @Column(name = "hypes")
     private Integer hypes;
 
@@ -99,7 +99,7 @@ public class Game {
     @Column(name = "expansion_ids", columnDefinition = "TEXT")
     private String expansionIds;
 
-    /** JSON array of IGDB game ids — IGDB's own similarity graph. */
+    /** JSON array of IGDB game ids. IGDB's own similarity graph. */
     @Column(name = "similar_game_ids", columnDefinition = "TEXT")
     private String similarGameIds;
 

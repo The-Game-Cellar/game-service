@@ -105,7 +105,7 @@ class DerivedGenreEngineTest {
     void deriveGenres_matches_survival_horror_via_psychological_horror_tag() {
         DerivedGenreEngine engine = newLoadedEngine();
         // IGDB tags many survival-horror titles (RE7, Silent Hill etc) with
-        // "psychological horror" instead of "survival horror" — both should match.
+        // "psychological horror" instead of "survival horror"; both should match.
         assertThat(engine.deriveGenres(Set.of("psychological horror"), Set.of())).contains("Survival Horror");
     }
 

@@ -144,7 +144,7 @@ class IgdbApiClientTest {
         ArgumentCaptor<HttpEntity<String>> captor = ArgumentCaptor.forClass(HttpEntity.class);
         verify(restTemplate).postForObject(anyString(), captor.capture(), eq(IgdbGameDto[].class));
         String body = captor.getValue().getBody();
-        // Sanitize strips " and ; from input — attacker can't break out of search string or inject new clauses
+        // Sanitize strips " and ; from input; attacker can't break out of search string or inject new clauses
         assertThat(body).matches("(?s).*search \"[^\"]*\".*");
     }
 
