@@ -25,9 +25,9 @@ public class GameResponse {
     private String backgroundImage;
     private String coverImageUrl;
     private String released;
-    /** IGDB {@code first_release_date} as Unix epoch seconds — queryable canonical worldwide release. */
+    /** IGDB {@code first_release_date} as Unix epoch seconds. Queryable canonical worldwide release. */
     private Long firstReleaseDate;
-    /** IGDB {@code hypes} — anticipation count for upcoming titles. Null when IGDB has no hype signal. */
+    /** IGDB {@code hypes}. Anticipation count for upcoming titles. Null when IGDB has no hype signal. */
     private Integer hypes;
     private String esrbRating;
 

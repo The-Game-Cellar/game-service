@@ -23,7 +23,7 @@ import java.util.Map;
  * columns on every cached game. Pre-existing rows (cached before these columns existed)
  * have both fields NULL. Walks the whole table page-by-page, batches IGDB lookups
  * 500 ids at a time so a 101k-row catalog completes in minutes rather than hours,
- * and skips rows that already have a populated first_release_date — second runs are
+ * and skips rows that already have a populated first_release_date. Second runs are
  * cheap enough to use as a self-heal sweep after a future schema bump.
  */
 @Slf4j
@@ -114,7 +114,7 @@ public class ReleaseDataBackfillService {
             page++;
         }
 
-        log.info("Release-data backfill complete — examined={} skipped={} fetched={} updatedDates={} updatedHypes={}",
+        log.info("Release-data backfill complete: examined={} skipped={} fetched={} updatedDates={} updatedHypes={}",
                 examined, skipped, fetched, updatedDates, updatedHypes);
 
         Map<String, Object> result = new LinkedHashMap<>();

@@ -80,6 +80,10 @@ A small set of columns are stored as JSON-as-`TEXT` (`screenshots`, `videos`, `d
 | GET    | `/api/v1/games/platforms`             | All platform names from the local catalog.                                                               |
 | GET    | `/api/v1/platforms/catalog`           | Curated platform catalog (`is_preference_eligible = TRUE`) with manufacturer category + display order. Drives the Preferences picker. |
 | GET    | `/api/v1/games/tags/popular?limit=N`  | Top-N catalog tags by `game_tags` occurrence, with a curated junk blocklist applied at SQL level.        |
+| GET    | `/api/v1/games/by-franchise/{name}`   | Games tagged with a given franchise. Filters to main games + remakes, `parentGameId IS NULL`. Optional `limit`, `excludeIgdbId`. |
+| GET    | `/api/v1/games/by-collection/{name}`  | Games tagged with a given collection. Same filter shape as `by-franchise`. |
+| GET    | `/api/v1/games/by-developer/{name}`   | Games where developer matches against the CSV `developers` column (exact word boundary). Optional `limit`, `excludeIgdbId`. |
+| GET    | `/api/v1/games/{igdbId}/editions`     | Derivative releases of a main game (editions, remakes, remasters, ports, etc.). |
 
 ### Admin
 

@@ -119,7 +119,7 @@ class GameCacheServiceTest {
 
     @Test
     void applyDerivedGenres_clears_all_derived_when_engine_returns_empty_set() {
-        // Rule was removed from YAML — backfill / refresh should strip the old derived row.
+        // Rule was removed from YAML; backfill / refresh should strip the old derived row.
         Game game = newGame();
         game.getGenres().add(derivedGenre("Soulslike"));
         game.getGenres().add(igdbGenre("Adventure"));

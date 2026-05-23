@@ -24,7 +24,7 @@ public class CuratedTagAllowlist {
     void load() {
         ClassPathResource resource = new ClassPathResource(RESOURCE_PATH);
         if (!resource.exists()) {
-            log.warn("Curated tag allowlist not found at classpath:{} — every tag will be accepted (filter disabled). " +
+            log.warn("Curated tag allowlist not found at classpath:{}. Every tag will be accepted (filter disabled). " +
                     "Add the file to enforce the allowlist.", RESOURCE_PATH);
             return;
         }
@@ -39,17 +39,17 @@ public class CuratedTagAllowlist {
                 if (!key.isEmpty()) entries.add(key);
             }
         } catch (Exception e) {
-            log.error("Failed to load curated tag allowlist from classpath:{} — filter disabled. Error: {}",
+            log.error("Failed to load curated tag allowlist from classpath:{}. Filter disabled. Error: {}",
                     RESOURCE_PATH, e.getMessage());
             return;
         }
         if (entries.isEmpty()) {
-            log.warn("Curated tag allowlist file at classpath:{} contains zero entries — filter disabled.", RESOURCE_PATH);
+            log.warn("Curated tag allowlist file at classpath:{} contains zero entries. Filter disabled.", RESOURCE_PATH);
             return;
         }
         this.normalizedAllowed = Set.copyOf(entries);
         this.enabled = true;
-        log.info("Curated tag allowlist loaded — {} unique normalized entries enforced.", entries.size());
+        log.info("Curated tag allowlist loaded: {} unique normalized entries enforced.", entries.size());
     }
 
     /**

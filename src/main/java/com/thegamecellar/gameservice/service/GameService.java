@@ -75,13 +75,13 @@ public class GameService {
             Game game = cached.get();
             // Critical-data stale check on the user-triggered path. Each refresh
             // here costs an extra IGDB roundtrip, so we only fire on truly
-            // missing core data — the looser cacheIfAbsent stale check picks up
+            // missing core data. The looser cacheIfAbsent stale check picks up
             // the rest naturally as the worker re-walks the catalog.
             //
             // Tags deliberately excluded: an empty tag set is now the legitimate
             // post-allowlist-filter state for many games. Re-fetching on read
             // would just re-pull the same IGDB keywords, drop them through the
-            // allowlist, and leave tags empty again — every view would hit IGDB
+            // allowlist, and leave tags empty again. Every view would hit IGDB
             // for nothing. Tag refresh stays on the worker's nightly catalog walk.
             boolean stale = game.getGenres().isEmpty()
                     || game.getDescription() == null
@@ -111,7 +111,7 @@ public class GameService {
      * "The Witcher 3: Wild Hunt - Game of the Year Edition" → parent = "The Witcher 3: Wild
      * Hunt"). Picks the longest prefix-match so deeply-nested editions still resolve to the
      * most specific parent. Gated to categories where IGDB routinely omits parent_game while
-     * still tagging the variant correctly (3 Bundle / 5 Mod / 14 Update) — main titles
+     * still tagging the variant correctly (3 Bundle / 5 Mod / 14 Update). Main titles
      * (category 0) and properly-linked Remakes/Remasters/Standalone Expansions (4/8/9/10)
      * never go through this path.
      */
@@ -169,7 +169,7 @@ public class GameService {
 
         // IGDB's search endpoint can only filter by query / genre / platform. If the user
         // narrowed by gameMode, perspective, or asked for variants-only, IGDB would
-        // return generic results that ignore those filters — i.e. misleading fallback. In
+        // return generic results that ignore those filters (i.e. misleading fallback). In
         // that case we return empty to let the UI render an honest "no matches" state rather
         // than a fake-broad list.
         boolean igdbCanMatchFilters = !isSet(gameMode) && !isSet(perspective)
@@ -237,7 +237,7 @@ public class GameService {
             List<Predicate> preds = new ArrayList<>();
 
             // gameType: main (default) treats remakes (cat 8) as full games alongside main_game (0)
-            // and uncategorised rows. variant covers GOTY/deluxe/bundle/expansion/port/etc — but
+            // and uncategorised rows. variant covers GOTY/deluxe/bundle/expansion/port/etc, but
             // never remake, since those now live in main. all skips the category filter entirely.
             if (gameType == null || "main".equalsIgnoreCase(gameType)) {
                 preds.add(cb.or(
@@ -263,7 +263,7 @@ public class GameService {
 
             if (isSet(platform)) {
                 // Multi-platform umbrella support. Frontend sends a comma-separated list
-                // when the user picks an umbrella label like "PlayStation" — the children expand
+                // when the user picks an umbrella label like "PlayStation"; the children expand
                 // to all 7 PS platforms server-side. A single child platform comes through as
                 // one value and falls into the same IN-clause naturally.
                 List<String> wanted = java.util.Arrays.stream(platform.split(","))
@@ -312,7 +312,7 @@ public class GameService {
     /**
      * DB-backed Coming Soon read path. Returns hype-weighted random sample over upcoming
      * games whose canonical first_release_date falls within the window. Worker keeps the
-     * underlying rows fresh — no IGDB call on the read path.
+     * underlying rows fresh: no IGDB call on the read path.
      */
     @Transactional(readOnly = true)
     public GameSearchResponse getUpcomingGames(List<String> platforms, int windowDays, int limit, java.util.Set<Integer> excludeIgdbIds) {
@@ -409,6 +409,15 @@ public class GameService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<GameResponse> getByDeveloper(String developerName, int limit, Integer excludeIgdbId) {
+        Sort sort = Sort.by(Sort.Order.desc("released").nullsLast());
+        List<Game> raw = gameRepository.findByDeveloperName(developerName, PageRequest.of(0, Math.min(limit * 4, 100), sort));
+        return dedupeVariants(raw, excludeIgdbId, limit).stream()
+                .map(GameMapper::toResponse)
+                .toList();
+    }
+
     /**
      * Returns derivative releases of a main game: editions, remakes, remasters, standalone
      * expansions, ports, updates, etc. Matches on TWO axes because IGDB data is unreliable:
@@ -419,7 +428,7 @@ public class GameService {
      * Edition" which routinely come back as {@code parentGameId=NULL} regardless of category).
      * Excludes plain DLC + Expansion (1, 2) since those live in the DLC stack, and
      * Remake (8) since remakes are full standalone games surfaced in default browse.
-     * Bundle (3) is INCLUDED — that's where Complete / GOTY editions sit.
+     * Bundle (3) is INCLUDED: that's where Complete / GOTY editions sit.
      */
     @Transactional(readOnly = true)
     public List<GameResponse> getEditionsOf(Integer parentIgdbId) {
@@ -476,7 +485,7 @@ public class GameService {
     // ── Admin backfill ────────────────────────────────────────────────────────
 
     /**
-     * One-shot backfill for games cached before the developers column was added —
+     * One-shot backfill for games cached before the developers column was added.
      * re-fetches each {@code developers IS NULL} row from IGDB so the column gets
      * populated. Honours the same 250 ms IGDB rate-limit gap used by the catalog
      * worker. Designed to run via {@link AdminSyncExecutor} so only one admin job
@@ -484,7 +493,7 @@ public class GameService {
      */
     public void backfillDevelopers() {
         long total = gameRepository.countByDevelopersIsNull();
-        log.info("Developer backfill starting — {} candidate games", total);
+        log.info("Developer backfill starting: {} candidate games", total);
         int processed = 0;
         int updated = 0;
         int batchSize = 100;
@@ -511,7 +520,7 @@ public class GameService {
             }
             log.info("Developer backfill progress: processed={}/{} updated={}", processed, total, updated);
         }
-        log.info("Developer backfill complete — processed={} updated={}", processed, updated);
+        log.info("Developer backfill complete: processed={} updated={}", processed, updated);
     }
 
     // ── IGDB catalog worker support ───────────────────────────────────────────
@@ -591,15 +600,15 @@ public class GameService {
     /**
      * Hype-weighted random pick over upcoming games whose canonical release falls within
      * {@code [now, now + windowDays]}. Each candidate's pick weight = max(hypes, 1). Null
-     * hypes are treated as 0 (per user decision — fair if all candidates have null, otherwise
+     * hypes are treated as 0 (per user decision: fair if all candidates have null, otherwise
      * never picked). Sample without replacement until {@code limit} reached or pool exhausted.
-     * Read path is DB-only — worker keeps the underlying rows fresh.
+     * Read path is DB-only; worker keeps the underlying rows fresh.
      */
     @Transactional(readOnly = true)
     public List<GameResponse> getUpcoming(List<String> platformFilter, int windowDays, int limit, java.util.Set<Integer> excludeIgdbIds) {
         long now = java.time.Instant.now().getEpochSecond();
         // windowDays <= 0 = unbounded horizon (the "All" toggle on the frontend). Long.MAX_VALUE
-        // is the natural upper bound for the BIGINT first_release_date column — IGDB never sets
+        // is the natural upper bound for the BIGINT first_release_date column; IGDB never sets
         // dates near that magnitude so the BETWEEN filter degenerates to "any future date".
         long horizonEnd = (windowDays <= 0)
                 ? Long.MAX_VALUE
@@ -639,8 +648,8 @@ public class GameService {
 
     /**
      * Weighted random sample without replacement. Weight of each candidate is
-     * {@code max(hypes, 0)}; null hypes count as 0 — they only get picked when every
-     * remaining candidate has zero weight (uniform random fallback over zero-weight tail).
+     * {@code max(hypes, 0)}; null hypes count as 0 (they only get picked when every
+     * remaining candidate has zero weight, uniform random fallback over zero-weight tail).
      */
     private List<Game> weightedSampleByHype(List<Game> candidates, int limit) {
         java.util.List<Game> remaining = new java.util.ArrayList<>(candidates);

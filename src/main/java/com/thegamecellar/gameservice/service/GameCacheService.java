@@ -69,7 +69,7 @@ public class GameCacheService {
         Optional<Game> existing = gameRepository.findByIgdbId(dto.getId());
         if (existing.isPresent()) {
             // When search/popular returns a game we cached earlier with partial
-            // data, use the fresh DTO to backfill — no extra IGDB roundtrip needed.
+            // data, use the fresh DTO to backfill, no extra IGDB roundtrip needed.
             Game game = existing.get();
             if (isStale(game)) {
                 try {
@@ -153,7 +153,7 @@ public class GameCacheService {
         if (game.getHypes() == null && dto.getHypes() != null) {
             game.setHypes(dto.getHypes());
         }
-        // JSON-as-TEXT fields — fill if currently null
+        // JSON-as-TEXT fields, fill if currently null
         if (game.getScreenshots() == null) game.setScreenshots(serializeScreenshots(dto));
         if (game.getVideos() == null) game.setVideos(serializeVideos(dto));
         if (game.getDlcIds() == null) game.setDlcIds(serializeIntList(dto.getDlcs()));
@@ -168,7 +168,7 @@ public class GameCacheService {
 
     /**
      * Force-overwrite refresh for volatile upcoming-release fields. Used by the daily
-     * worker pass over rows whose canonical {@code first_release_date} is in the future —
+     * worker pass over rows whose canonical {@code first_release_date} is in the future.
      * dates slip, hype counts move daily, per-platform release plans change, so these
      * fields are re-set unconditionally rather than the fill-if-null behaviour of
      * {@link #refreshStaleGame}.
@@ -214,7 +214,7 @@ public class GameCacheService {
     /**
      * Re-applies the derived-genre rule set to the game. Replace-pattern: removes any prior
      * {@code source=DERIVED} entries from the join, then re-derives from the game's current
-     * tags + themes and adds the new set. Idempotent — re-running with the same rule set is
+     * tags + themes and adds the new set. Idempotent; re-running with the same rule set is
      * a no-op. Called from both {@link #cacheGame} (new rows) and {@link #refreshStaleGame}
      * (existing rows hitting the stale path) so derived genres stay in sync with the YAML
      * regardless of how the game enters the cache.
@@ -297,7 +297,7 @@ public class GameCacheService {
      *   <li>shorter than {@link #TAG_MIN_LENGTH}</li>
      *   <li>platform-prefix tags ({@code released-on-steam}, {@code exclusive-to-pc} etc.)</li>
      * </ul>
-     * Allowlist enforcement runs as a second gate after this method — see
+     * Allowlist enforcement runs as a second gate after this method. See
      * {@link CuratedTagAllowlist} for the curated keep-set.
      */
     private boolean isNoiseTag(String name) {

@@ -43,7 +43,7 @@ public class AdminController {
         if (!adminSyncExecutor.trySubmit("quick-sync", igdbCatalogWorker::quickSync)) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("Sync already in progress");
         }
-        return ResponseEntity.accepted().body("Quick sync started — fetching ~100 games");
+        return ResponseEntity.accepted().body("Quick sync started, fetching ~100 games");
     }
 
     @PostMapping("/backfill-developers")

@@ -45,14 +45,14 @@ public class DerivedGenreEngine {
     void load() {
         ClassPathResource resource = new ClassPathResource(RESOURCE_PATH);
         if (!resource.exists()) {
-            log.warn("Derived-genre rules not found at classpath:{} — engine disabled, no genres will be derived.",
+            log.warn("Derived-genre rules not found at classpath:{}. Engine disabled, no genres will be derived.",
                     RESOURCE_PATH);
             return;
         }
 
         List<DerivedRule> parsed = parseYaml(resource);
         if (parsed.isEmpty()) {
-            log.warn("Derived-genre rules file at classpath:{} contains zero rules — engine disabled.", RESOURCE_PATH);
+            log.warn("Derived-genre rules file at classpath:{} contains zero rules. Engine disabled.", RESOURCE_PATH);
             return;
         }
 
@@ -60,7 +60,7 @@ public class DerivedGenreEngine {
 
         this.rules = List.copyOf(parsed);
         this.derivedNames = parsed.stream().map(DerivedRule::name).collect(Collectors.toUnmodifiableSet());
-        log.info("Derived-genre engine loaded — {} rules: {}",
+        log.info("Derived-genre engine loaded: {} rules ({})",
                 rules.size(),
                 rules.stream().map(DerivedRule::name).collect(Collectors.joining(", ")));
     }

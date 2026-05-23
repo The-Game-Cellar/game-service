@@ -11,7 +11,7 @@ import java.util.Set;
 /**
  * Partitions IGDB's flat platform list into the Big-4 umbrellas (PlayStation, PC, Nintendo,
  * Xbox) plus an alphabetically-sorted "others" tail. Names are matched against canonical
- * IGDB platform names — entries the DB doesn't have are silently dropped from each
+ * IGDB platform names. Entries the DB doesn't have are silently dropped from each
  * umbrella so the dropdown only shows generations the user could actually filter by.
  * <p>
  * Pin order: PC → PlayStation → Nintendo → Xbox. PC sits above the console

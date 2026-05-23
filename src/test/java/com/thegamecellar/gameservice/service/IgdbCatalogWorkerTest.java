@@ -118,7 +118,7 @@ class IgdbCatalogWorkerTest {
 
         worker.syncCatalog();
 
-        // 3 pages run all the way through — fetched > 0 means catalog isn't exhausted
+        // 3 pages run all the way through; fetched > 0 means catalog isn't exhausted
         verify(gameService, times(3)).syncIgdbCatalogOffset(anyInt(), anyInt());
         ArgumentCaptor<SyncState> captor = ArgumentCaptor.forClass(SyncState.class);
         verify(syncStateRepository).save(captor.capture());

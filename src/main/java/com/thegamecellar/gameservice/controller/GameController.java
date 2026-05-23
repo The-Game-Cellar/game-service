@@ -134,6 +134,14 @@ public class GameController {
         return ResponseEntity.ok(gameService.getByCollection(name, limit, excludeIgdbId));
     }
 
+    @GetMapping("/by-developer/{name}")
+    public ResponseEntity<List<GameResponse>> getByDeveloper(
+            @PathVariable String name,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+            @RequestParam(required = false) @Min(1) Integer excludeIgdbId) {
+        return ResponseEntity.ok(gameService.getByDeveloper(name, limit, excludeIgdbId));
+    }
+
     @GetMapping("/{igdbId}/editions")
     public ResponseEntity<List<GameResponse>> getEditionsOf(@PathVariable @Min(1) Integer igdbId) {
         return ResponseEntity.ok(gameService.getEditionsOf(igdbId));

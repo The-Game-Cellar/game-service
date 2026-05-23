@@ -554,7 +554,7 @@ class GameServiceTest {
         ArgumentCaptor<java.util.Collection<String>> captor = ArgumentCaptor.forClass(java.util.Collection.class);
         verify(tagRepository).findPopularExcludingBlocklist(captor.capture(), eq(50));
         java.util.Collection<String> blocklist = captor.getValue();
-        // Spot-check that the blocklist actually carries the curated entries — guards against a
+        // Spot-check that the blocklist actually carries the curated entries; guards against a
         // future refactor accidentally passing an empty set to the repository.
         assertThat(blocklist).contains("nudity", "anime", "casual", "roguelike", "3d", "violent");
         assertThat(blocklist.size()).isGreaterThan(100);
@@ -565,6 +565,37 @@ class GameServiceTest {
         when(tagRepository.findPopularExcludingBlocklist(any(), anyInt())).thenReturn(List.of());
 
         assertThat(gameService.getPopularTags(50)).isEmpty();
+    }
+
+    @Test
+    void getByDeveloper_mapsResultsAndExcludesCurrentGame() {
+        Game capcomA = Game.builder()
+                .id(2L).igdbId(2002).name("Resident Evil 4")
+                .developers("Capcom")
+                .genres(new HashSet<>()).platforms(new HashSet<>())
+                .tags(new HashSet<>()).themes(new HashSet<>())
+                .build();
+        Game capcomB = Game.builder()
+                .id(3L).igdbId(2003).name("Devil May Cry 5")
+                .developers("Capcom")
+                .genres(new HashSet<>()).platforms(new HashSet<>())
+                .tags(new HashSet<>()).themes(new HashSet<>())
+                .build();
+        when(gameRepository.findByDeveloperName(eq("Capcom"), any(Pageable.class)))
+                .thenReturn(List.of(capcomA, capcomB));
+
+        List<GameResponse> result = gameService.getByDeveloper("Capcom", 20, 2002);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getIgdbId()).isEqualTo(2003);
+    }
+
+    @Test
+    void getByDeveloper_returnsEmptyListWhenNoMatches() {
+        when(gameRepository.findByDeveloperName(eq("Nobody"), any(Pageable.class)))
+                .thenReturn(List.of());
+
+        assertThat(gameService.getByDeveloper("Nobody", 20, null)).isEmpty();
     }
 
     private Game upcomingGame(int igdbId, String name, Integer hypes) {
