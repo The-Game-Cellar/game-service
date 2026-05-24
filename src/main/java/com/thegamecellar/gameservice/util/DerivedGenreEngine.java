@@ -19,12 +19,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * Rule-based engine that promotes tag / theme combinations to first-class derived genres.
- * Rules are loaded from {@code derived-genres.yaml} at startup. Rule names that collide with
- * existing IGDB-sourced genre rows cause a fail-fast {@link IllegalStateException} so the
- * mismatch surfaces during boot instead of silently corrupting the join table at write time.
- */
+// Loads derived-genres.yaml. Fail-fast on name collision with an IGDB-sourced genre so corruption surfaces at boot, not write.
 @Slf4j
 @Component
 public class DerivedGenreEngine {
@@ -65,11 +60,7 @@ public class DerivedGenreEngine {
                 rules.stream().map(DerivedRule::name).collect(Collectors.joining(", ")));
     }
 
-    /**
-     * Returns the set of derived genre names that match the given tag + theme inputs. Inputs
-     * are normalized through {@link CuratedTagAllowlist#normalize(String)} before matching so
-     * surface variants ("Souls-Like" / "souls like" / "souls likes") collapse to one key.
-     */
+    // Normalises through CuratedTagAllowlist so "Souls-Like" / "souls like" / "souls likes" collapse to one key.
     public Set<String> deriveGenres(Set<String> tagNames, Set<String> themeNames) {
         if (rules.isEmpty()) return Set.of();
         Set<String> normalizedTags = normalizeAll(tagNames);
@@ -84,7 +75,6 @@ public class DerivedGenreEngine {
         return result;
     }
 
-    /** True when the supplied genre name is governed by a derived-genre rule (not IGDB). */
     public boolean isDerivedName(String genreName) {
         return derivedNames.contains(genreName);
     }
@@ -176,7 +166,7 @@ public class DerivedGenreEngine {
 
     // ── rule record ───────────────────────────────────────────────────────────
 
-    /** Match blocks combine with OR; *All blocks require every entry to be present. */
+    // Match blocks OR-combine; *All blocks require every entry present.
     record DerivedRule(String name,
                        Set<String> tagsAny,
                        Set<String> tagsAll,

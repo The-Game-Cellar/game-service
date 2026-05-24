@@ -29,9 +29,7 @@ public class GameMapper {
     private static final String IGDB_SCREENSHOT_URL_TEMPLATE =
             "https://images.igdb.com/igdb/image/upload/t_screenshot_big/%s.jpg";
 
-    // ── IGDB DTO → Game entity (scalar fields only) ──────────────────────────
-    // Collections are resolved via GameCacheService.cacheGame (find-or-create)
-
+    // IGDB DTO -> Game entity, scalar fields only. Collections resolved in GameCacheService.cacheGame.
     public static Game toEntity(IgdbGameDto dto) {
         Game game = new Game();
         game.setIgdbId(dto.getId());
@@ -74,12 +72,7 @@ public class GameMapper {
         return game;
     }
 
-    /**
-     * IGDB scale is 0–100; normalize to 0–10 with 2-decimal precision. The 0–10 scale matches
-     * what igdb.com displays publicly (their site divides the API's 0–100 by 10) and aligns
-     * with the user-rating scale stored on {@code user_games.rating} (Integer 0–10), so a
-     * user's own rating and the IGDB rating displayed alongside it now share the same axis.
-     */
+    // IGDB scale is 0-100; normalise to 0-10 so it matches igdb.com display + user_games.rating axis.
     public static BigDecimal normalizeRating(double igdbRating) {
         return BigDecimal.valueOf(igdbRating / 10.0).setScale(2, RoundingMode.HALF_UP);
     }
@@ -93,8 +86,6 @@ public class GameMapper {
                 .reduce((a, b) -> a + "," + b)
                 .orElse(null);
     }
-
-    // ── Game entity → GameResponse ────────────────────────────────────────────
 
     public static GameResponse toResponse(Game game) {
         List<String> genres = game.getGenres().stream().map(Genre::getName).toList();
@@ -201,8 +192,7 @@ public class GameMapper {
                 .build();
     }
 
-    // ── IGDB DTO → GameResponse (bypass DB, used for live IGDB results) ───────
-
+    // Bypasses the cache; used when surfacing live IGDB rows that aren't persisted yet.
     public static GameResponse toResponseFromIgdb(IgdbGameDto dto) {
         List<String> genres = nameList(dto.getGenres());
         List<String> platforms = nameList(dto.getPlatforms());
@@ -319,8 +309,6 @@ public class GameMapper {
                 .multiplayerModes(multiplayerModes)
                 .build();
     }
-
-    // ── helpers ───────────────────────────────────────────────────────────────
 
     private static List<String> nameList(List<com.thegamecellar.gameservice.model.dto.igdb.IgdbNamedEntityDto> source) {
         return source != null

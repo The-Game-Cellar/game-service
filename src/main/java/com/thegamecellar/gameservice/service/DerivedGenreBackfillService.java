@@ -21,13 +21,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * One-shot backfill that walks the entire {@code games} table page by page and re-applies the
- * derived-genre rule set to every cached row. Replace-pattern via
- * {@link GameCacheService#applyDerivedGenres(Game)}; any {@code source=DERIVED} rows that no
- * longer match the current YAML are removed, and freshly-matching rules are added. Idempotent:
- * re-running with the same rule set is a no-op for every game.
- */
+// Idempotent re-apply of derived-genre rules across the cache. Replace-pattern via GameCacheService.applyDerivedGenres.
 @Slf4j
 @Service
 @RequiredArgsConstructor

@@ -36,13 +36,11 @@ public class GameCacheService {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    /** IGDB tag noise filter prefixes. Tags starting with these are dropped at ingest. */
     private static final List<String> NOISE_TAG_PREFIXES = List.of(
             "released-on-", "released on ", "available-on-", "available on ",
             "exclusive-to-", "exclusive to "
     );
 
-    /** Minimum tag length. Below this is almost always noise. */
     private static final int TAG_MIN_LENGTH = 3;
 
     private final GameRepository gameRepository;
@@ -57,19 +55,12 @@ public class GameCacheService {
     private final CuratedTagAllowlist curatedTagAllowlist;
     private final DerivedGenreEngine derivedGenreEngine;
 
-    /**
-     * Caches the game if not already present. Each call runs in its own
-     * transaction so a concurrent insert collision only rolls back this one
-     * game, not the caller's broader transaction.
-     *
-     * @return true if the game was newly inserted, false if it already existed
-     */
+    // REQUIRES_NEW so a concurrent-insert rollback doesn't poison the caller's transaction.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean cacheIfAbsent(IgdbGameDto dto) {
         Optional<Game> existing = gameRepository.findByIgdbId(dto.getId());
         if (existing.isPresent()) {
-            // When search/popular returns a game we cached earlier with partial
-            // data, use the fresh DTO to backfill, no extra IGDB roundtrip needed.
+            // Reuse the inbound DTO to backfill stale rows; saves an IGDB roundtrip on warm paths.
             Game game = existing.get();
             if (isStale(game)) {
                 try {
@@ -153,7 +144,6 @@ public class GameCacheService {
         if (game.getHypes() == null && dto.getHypes() != null) {
             game.setHypes(dto.getHypes());
         }
-        // JSON-as-TEXT fields, fill if currently null
         if (game.getScreenshots() == null) game.setScreenshots(serializeScreenshots(dto));
         if (game.getVideos() == null) game.setVideos(serializeVideos(dto));
         if (game.getDlcIds() == null) game.setDlcIds(serializeIntList(dto.getDlcs()));
@@ -166,13 +156,7 @@ public class GameCacheService {
         return gameRepository.save(game);
     }
 
-    /**
-     * Force-overwrite refresh for volatile upcoming-release fields. Used by the daily
-     * worker pass over rows whose canonical {@code first_release_date} is in the future.
-     * dates slip, hype counts move daily, per-platform release plans change, so these
-     * fields are re-set unconditionally rather than the fill-if-null behaviour of
-     * {@link #refreshStaleGame}.
-     */
+    // Unconditional overwrite for daily worker pass; dates slip and hype moves so fill-if-null is wrong here.
     @Transactional
     public Game refreshUpcomingGame(Game game, IgdbGameDto dto) {
         game.setFirstReleaseDate(dto.getFirstReleaseDate());
@@ -211,14 +195,7 @@ public class GameCacheService {
 
     // ── associations ──────────────────────────────────────────────────────────
 
-    /**
-     * Re-applies the derived-genre rule set to the game. Replace-pattern: removes any prior
-     * {@code source=DERIVED} entries from the join, then re-derives from the game's current
-     * tags + themes and adds the new set. Idempotent; re-running with the same rule set is
-     * a no-op. Called from both {@link #cacheGame} (new rows) and {@link #refreshStaleGame}
-     * (existing rows hitting the stale path) so derived genres stay in sync with the YAML
-     * regardless of how the game enters the cache.
-     */
+    // Idempotent replace-pattern: drops prior source=DERIVED entries then re-derives from current tags + themes.
     void applyDerivedGenres(Game game) {
         Set<String> tagNames = game.getTags().stream().map(Tag::getName).collect(java.util.stream.Collectors.toSet());
         Set<String> themeNames = game.getThemes().stream().map(Theme::getName).collect(java.util.stream.Collectors.toSet());
@@ -290,16 +267,6 @@ public class GameCacheService {
         return result;
     }
 
-    /**
-     * Filters IGDB keyword noise at ingest. Drops:
-     * <ul>
-     *   <li>null / blank</li>
-     *   <li>shorter than {@link #TAG_MIN_LENGTH}</li>
-     *   <li>platform-prefix tags ({@code released-on-steam}, {@code exclusive-to-pc} etc.)</li>
-     * </ul>
-     * Allowlist enforcement runs as a second gate after this method. See
-     * {@link CuratedTagAllowlist} for the curated keep-set.
-     */
     private boolean isNoiseTag(String name) {
         if (name == null) return true;
         String trimmed = name.trim().toLowerCase();

@@ -14,24 +14,21 @@ public class GameResponse {
     private String description;
     private String storyline;
 
-    /** Critic score (0–5). */
+    // Critic + user scores normalised to 0-10. See GameMapper.normalizeRating.
     private BigDecimal rating;
     private Integer ratingCount;
-
-    /** User score (0–5). */
     private BigDecimal totalRating;
     private Integer totalRatingCount;
 
     private String backgroundImage;
     private String coverImageUrl;
     private String released;
-    /** IGDB {@code first_release_date} as Unix epoch seconds. Queryable canonical worldwide release. */
+    // IGDB first_release_date as Unix epoch seconds (canonical worldwide release).
     private Long firstReleaseDate;
-    /** IGDB {@code hypes}. Anticipation count for upcoming titles. Null when IGDB has no hype signal. */
     private Integer hypes;
     private String esrbRating;
 
-    /** IGDB category enum (0=main_game, 1=dlc_addon, 2=expansion, etc.). */
+    // IGDB category enum: 0=main, 1=dlc, 2=expansion, 3=bundle, 8=remake (see Game.java for full list).
     private Integer category;
     private Integer parentGameId;
     private String parentGameName;
@@ -46,10 +43,10 @@ public class GameResponse {
     private List<String> franchises;
     private List<String> collections;
 
-    /** Full IGDB CDN URLs for screenshots, ready to be used as {@code <img src>}. */
+    // Pre-built IGDB CDN URLs, plug straight into <img src>.
     private List<String> screenshotUrls;
 
-    /** YouTube video ids (use as {@code https://www.youtube.com/embed/{id}}). */
+    // YouTube video ids; consume as https://www.youtube.com/embed/{id}.
     private List<String> videoIds;
 
     private List<Integer> dlcIds;
@@ -65,9 +62,7 @@ public class GameResponse {
     public static class AgeRatingDTO {
         private Integer category;
         private Integer rating;
-        /** Human-readable rating body (e.g. "PEGI", "ESRB"). Null for unsupported bodies. */
         private String body;
-        /** Human-readable rating label (e.g. "16", "M"). Null for unsupported bodies. */
         private String label;
     }
 

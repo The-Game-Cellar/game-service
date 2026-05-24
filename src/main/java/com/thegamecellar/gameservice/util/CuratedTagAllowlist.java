@@ -52,11 +52,7 @@ public class CuratedTagAllowlist {
         log.info("Curated tag allowlist loaded: {} unique normalized entries enforced.", entries.size());
     }
 
-    /**
-     * Returns true when the allowlist is enforced AND the supplied raw tag matches an entry
-     * after normalization. Returns true unconditionally when the allowlist file is missing or
-     * empty (filter disabled, every tag passes through).
-     */
+    // Returns true unconditionally when the allowlist is disabled (missing or empty resource file).
     public boolean isAllowed(String rawTag) {
         if (!enabled) return true;
         if (rawTag == null) return false;
@@ -73,14 +69,8 @@ public class CuratedTagAllowlist {
         return normalizedAllowed.size();
     }
 
-    /**
-     * Normalizes both incoming IGDB tags and allowlist entries to the same canonical form so
-     * surface variants like "Souls-Like" / "souls like" / "souls-likes" / "soulslike" all
-     * collapse to the same key.
-     * Steps: lowercase, trim, dashes-to-spaces, collapse whitespace, strip a single trailing
-     * "s" only when the bare token is longer than four characters (so "rpgs" → "rpg" but
-     * "boss" stays "boss").
-     */
+    // Collapses surface variants ("Souls-Like" / "souls like" / "souls likes") to one key.
+    // Trailing "s" stripped only when bare token > 4 chars so "rpgs" → "rpg" but "boss" stays "boss".
     static String normalize(String raw) {
         if (raw == null) return "";
         String s = raw.trim().toLowerCase();
