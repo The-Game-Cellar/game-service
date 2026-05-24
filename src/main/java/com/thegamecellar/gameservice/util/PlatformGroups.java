@@ -8,24 +8,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Partitions IGDB's flat platform list into the Big-4 umbrellas (PlayStation, PC, Nintendo,
- * Xbox) plus an alphabetically-sorted "others" tail. Names are matched against canonical
- * IGDB platform names. Entries the DB doesn't have are silently dropped from each
- * umbrella so the dropdown only shows generations the user could actually filter by.
- * <p>
- * Pin order: PC → PlayStation → Nintendo → Xbox. PC sits above the console
- * umbrellas so the leaf row appears before any expandable row, giving a smoother
- * scan from "All Platforms" down through the pinned tier.
- */
+// Partitions IGDB platforms into Big-4 umbrellas + alphabetical "others" tail. Pin order PC -> PS -> Nintendo -> Xbox.
 public final class PlatformGroups {
 
     private PlatformGroups() {}
 
-    // Names below MUST match the post-normalization values stored in the DB
-    // (see IgdbPlatformMapper.NAME_NORMALIZATION). Entries that never land in
-    // the DB just get dropped from the umbrella, so listing the canonical
-    // form is the load-bearing detail here.
+    // Names MUST match IgdbPlatformMapper.NAME_NORMALIZATION; unmatched entries silently drop from the umbrella.
     private static final List<String> PLAYSTATION = List.of(
             "PlayStation", "PlayStation 2", "PlayStation 3", "PlayStation 4", "PlayStation 5",
             "PlayStation Portable", "PlayStation Vita");

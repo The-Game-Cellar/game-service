@@ -54,9 +54,7 @@ public class IgdbTokenService {
 
     private synchronized void refresh() {
         if (!needsRefresh()) return;
-        // Credentials go in the form-encoded body, not the URL. Query-string credentials
-        // are recorded by HTTP server access logs and error traces by default; body content
-        // is not. RFC 6749 §2.3.1 also recommends body or Basic auth over query string.
+        // Credentials in form body (not URL): query-string secrets leak into access logs / RFC 6749 §2.3.1.
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("client_id", clientId);
         form.add("client_secret", clientSecret);

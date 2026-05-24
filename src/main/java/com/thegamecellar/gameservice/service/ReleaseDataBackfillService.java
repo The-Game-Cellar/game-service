@@ -18,14 +18,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * One-shot backfill that populates the {@code first_release_date} and {@code hypes}
- * columns on every cached game. Pre-existing rows (cached before these columns existed)
- * have both fields NULL. Walks the whole table page-by-page, batches IGDB lookups
- * 500 ids at a time so a 101k-row catalog completes in minutes rather than hours,
- * and skips rows that already have a populated first_release_date. Second runs are
- * cheap enough to use as a self-heal sweep after a future schema bump.
- */
+// Batches IGDB fetches 500 ids at a time so a 101k-row backfill of first_release_date + hypes runs in minutes.
+// Idempotent: skips rows already filled, safe to re-run as a self-heal sweep after schema bumps.
 @Slf4j
 @Service
 @RequiredArgsConstructor

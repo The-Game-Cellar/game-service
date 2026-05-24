@@ -36,14 +36,14 @@ public class Game {
     @Column(name = "storyline", columnDefinition = "TEXT")
     private String storyline;
 
-    /** Critic score (IGDB {@code aggregated_rating}) normalized to 0–10. */
+    // Critic score (IGDB aggregated_rating) normalised to 0-10.
     @Column(name = "rating", precision = 4, scale = 2)
     private BigDecimal rating;
 
     @Column(name = "rating_count")
     private Integer ratingCount;
 
-    /** User score (IGDB {@code total_rating}) normalized to 0–10. */
+    // User score (IGDB total_rating) normalised to 0-10.
     @Column(name = "total_rating", precision = 4, scale = 2)
     private BigDecimal totalRating;
 
@@ -59,11 +59,11 @@ public class Game {
     @Column(name = "released", length = 20)
     private String released;
 
-    /** IGDB {@code first_release_date} as Unix epoch seconds. Queryable column for upcoming-release range filters. Nullable when IGDB has no canonical worldwide date yet (TBA). */
+    // IGDB first_release_date as Unix epoch seconds. Queryable column for upcoming-range filters; null on TBA.
     @Column(name = "first_release_date")
     private Long firstReleaseDate;
 
-    /** IGDB {@code hypes}. Count of users who marked the game as anticipated. Used as a weight signal for upcoming-release ordering. Null on rows IGDB has no hype data for. */
+    // IGDB hypes count. Weight signal for upcoming-release ordering.
     @Column(name = "hypes")
     private Integer hypes;
 
@@ -73,7 +73,7 @@ public class Game {
     @Column(name = "developers", columnDefinition = "TEXT")
     private String developers;
 
-    /** IGDB enum: 0=main_game, 1=dlc_addon, 2=expansion, 3=bundle, 4=standalone_expansion, 5=mod, 6=episode, 7=season, 8=remake, 9=remaster, 10=expanded_game, 11=port, 12=fork, 13=pack, 14=update. */
+    // IGDB enum: 0=main, 1=dlc, 2=expansion, 3=bundle, 4=standalone_expansion, 5=mod, 6=episode, 7=season, 8=remake, 9=remaster, 10=expanded, 11=port, 12=fork, 13=pack, 14=update.
     @Column(name = "category")
     private Integer category;
 
@@ -83,35 +83,35 @@ public class Game {
     @Column(name = "parent_game_name", length = 255)
     private String parentGameName;
 
-    /** JSON array of IGDB image_id strings. */
+    // JSON array of IGDB image_id strings.
     @Column(name = "screenshots", columnDefinition = "TEXT")
     private String screenshots;
 
-    /** JSON array of YouTube video_id strings. */
+    // JSON array of YouTube video_id strings.
     @Column(name = "videos", columnDefinition = "TEXT")
     private String videos;
 
-    /** JSON array of IGDB game ids. */
+    // JSON array of IGDB game ids.
     @Column(name = "dlc_ids", columnDefinition = "TEXT")
     private String dlcIds;
 
-    /** JSON array of IGDB game ids. */
+    // JSON array of IGDB game ids.
     @Column(name = "expansion_ids", columnDefinition = "TEXT")
     private String expansionIds;
 
-    /** JSON array of IGDB game ids. IGDB's own similarity graph. */
+    // JSON array of IGDB game ids (IGDB's own similarity graph).
     @Column(name = "similar_game_ids", columnDefinition = "TEXT")
     private String similarGameIds;
 
-    /** JSON array of {@code {category, rating}} ints. */
+    // JSON array of {category, rating} ints.
     @Column(name = "age_ratings", columnDefinition = "TEXT")
     private String ageRatings;
 
-    /** JSON array of {@code {platform, human, date}} per-platform release dates. */
+    // JSON array of {platform, human, date} per-platform release dates.
     @Column(name = "release_dates", columnDefinition = "TEXT")
     private String releaseDates;
 
-    /** JSON array of per-platform multiplayer mode descriptors. */
+    // JSON array of per-platform multiplayer mode descriptors.
     @Column(name = "multiplayer_modes", columnDefinition = "TEXT")
     private String multiplayerModes;
 

@@ -14,15 +14,7 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
     Optional<Game> findByIgdbId(Integer igdbId);
     boolean existsByIgdbId(Integer igdbId);
 
-    // ── Main-game default filter ──────────────────────────────────────────────
-    // Every browse / discovery / random / genre query is filtered to
-    // category IN (0, 8) (main game OR remake) OR category IS NULL by default.
-    // Remakes are full standalone games and surface in default browse alongside
-    // main games. Variants (DLC, Expansion, Bundle, Remaster, GOTY edition, etc.)
-    // are excluded so recommendations and Explore default-view never surface
-    // them. The /search endpoint accepts an explicit `gameType=variant` override
-    // which routes to the *Variants counterparts below, used only by the
-    // Explore variants toggle.
+    // Default filter: category IN (0, 8) OR NULL. Remakes count as main games; variants live in the *Variants methods below.
 
     @Query("SELECT DISTINCT g FROM Game g JOIN g.tags t WHERE LOWER(t.name) IN (:tagNames) AND (g.category IN (0, 8) OR g.category IS NULL)")
     List<Game> findByTagNamesIn(@Param("tagNames") List<String> tagNames);
@@ -42,12 +34,7 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
     @Query(value = "SELECT * FROM games WHERE category IN (0, 8) OR category IS NULL ORDER BY RANDOM() LIMIT :limit", nativeQuery = true)
     List<Game> findRandom(@Param("limit") int limit);
 
-    /**
-     * Random sample across all main-game rows in a genre that pass a quality bar
-     * (combined critic+user rating + minimum vote count). Backs the Recommendation
-     * Service candidate-pool generation: a single uniform random pick over the
-     * full quality subset, no page math, no NULL-tail, no pagination bias.
-     */
+    // Uniform random over quality subset (rating + vote-count gated). Used by Rec Service candidate-pool gen.
     @Query(value = """
             SELECT g.* FROM games g
             JOIN game_genres gg ON gg.game_id = g.id
@@ -70,11 +57,7 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
            countQuery = "SELECT COUNT(g) FROM Game g WHERE g.category IN (0, 8) OR g.category IS NULL")
     org.springframework.data.domain.Page<Game> findAllMainGames(Pageable pageable);
 
-    // ── Variants-only counterparts (used by Explore variant-toggle ONLY) ──────
-    // category > 2 AND <> 8 excludes plain DLC (1), Expansion (2) (already in
-    // the parent's DLC stack rail) and Remake (8) (now lives in main browse).
-    // Returns Bundles, Standalones, Remasters, Expanded Editions, Mods, Ports,
-    // Updates, GOTY editions, deluxe editions, etc.
+    // Variants-only: category > 2 AND <> 8. Excludes DLC/Expansion (in DLC stack) + Remake (in main).
 
     @Query(value = "SELECT g FROM Game g WHERE g.category > 2 AND g.category <> 8",
            countQuery = "SELECT COUNT(g) FROM Game g WHERE g.category > 2 AND g.category <> 8")
@@ -92,13 +75,7 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
     @Query("SELECT COUNT(DISTINCT g.id) FROM Game g JOIN g.genres gen JOIN g.platforms p WHERE LOWER(gen.name) = LOWER(:genreName) AND LOWER(p.name) = LOWER(:platformName) AND g.category > 2 AND g.category <> 8")
     long countVariantsByGenreAndPlatformName(@Param("genreName") String genreName, @Param("platformName") String platformName);
 
-    // ── game_modes + player_perspectives filter ───────────────────────────────
-    // Joined-table filters layered on top of the main-game default. Used by the
-    // /search endpoint when `gameMode` and/or `perspective` query params are set.
-
-    // gameMode and perspective use empty-string sentinels (instead of NULL) because Postgres
-    // JDBC binds NULL parameters as bytea by default, which causes lower(bytea) errors when
-    // wrapped in LOWER(). Empty string short-circuits the WHERE branch via plain equality.
+    // Empty-string sentinels (not NULL) because PG JDBC binds NULL as bytea, breaking LOWER(?) wrap.
     @Query("SELECT DISTINCT g FROM Game g " +
             "LEFT JOIN g.gameModes gm " +
             "LEFT JOIN g.playerPerspectives pp " +
@@ -128,8 +105,7 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
     @Query("SELECT g FROM Game g WHERE g.id IN (SELECT DISTINCT g2.id FROM Game g2 JOIN g2.collections c WHERE LOWER(c.name) = LOWER(:collectionName)) AND g.category IN (0, 8) AND g.parentGameId IS NULL")
     List<Game> findByCollectionName(@Param("collectionName") String collectionName, Pageable pageable);
 
-    /** Match against the comma-separated {@code developers} TEXT column.
-     *  Wraps both sides with commas so {@code "Capcom"} matches {@code "Capcom"} but not {@code "Capcom Vancouver"}. */
+    // Comma-wrap both sides so "Capcom" matches "Capcom" but not "Capcom Vancouver" in the CSV column.
     @Query("SELECT g FROM Game g WHERE LOWER(CONCAT(',', g.developers, ',')) LIKE LOWER(CONCAT('%,', :developerName, ',%')) AND g.category IN (0, 8) AND g.parentGameId IS NULL")
     List<Game> findByDeveloperName(@Param("developerName") String developerName, Pageable pageable);
 
@@ -143,11 +119,7 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
                                @Param("parentDbId") Long parentDbId,
                                @Param("excludedCategories") List<Integer> excludedCategories);
 
-    // ── Upcoming releases ─────────────────────────────────────────────────────
-    // Date-range queries against the cached canonical first_release_date column.
-    // Main-game default filter (category 0/8/null) applied so DLC + bundles do
-    // not pollute the Coming Soon view. Worker keeps the column fresh; read path
-    // never calls IGDB.
+    // Date-range over cached first_release_date. Worker keeps the column fresh; read path is DB-only.
 
     @Query("SELECT g FROM Game g WHERE g.firstReleaseDate IS NOT NULL " +
             "AND g.firstReleaseDate >= :fromEpochSeconds " +
@@ -166,15 +138,10 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
                                          @Param("toEpochSeconds") long toEpochSeconds,
                                          @Param("platformNamesLower") List<String> platformNamesLower);
 
-    /** Used by the daily worker refresh pass. Pulls every game whose canonical date is in the future, regardless of platform or horizon. */
     @Query("SELECT g.igdbId FROM Game g WHERE g.firstReleaseDate IS NOT NULL AND g.firstReleaseDate > :nowEpochSeconds")
     List<Integer> findUpcomingIgdbIds(@Param("nowEpochSeconds") long nowEpochSeconds);
 
-    /**
-     * Distinct platform names across all upcoming main games. Used to populate the Explore
-     * Coming Soon platform dropdown so it only offers platforms that actually have upcoming
-     * releases (instead of the full ~150-platform IGDB catalog).
-     */
+    // Filters the Explore Coming-Soon dropdown to platforms that actually have upcoming rows, not the full IGDB catalog.
     @Query("SELECT DISTINCT p.name FROM Game g JOIN g.platforms p " +
             "WHERE g.firstReleaseDate IS NOT NULL " +
             "AND g.firstReleaseDate > :nowEpochSeconds " +
@@ -182,16 +149,11 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
             "ORDER BY p.name")
     List<String> findDistinctUpcomingPlatformNames(@Param("nowEpochSeconds") long nowEpochSeconds);
 
-    /** Used by the one-shot backfill admin endpoint. Paginates through every cached game so first_release_date + hypes can be repopulated from IGDB. */
     @Query(value = "SELECT g FROM Game g",
            countQuery = "SELECT COUNT(g) FROM Game g")
     org.springframework.data.domain.Page<Game> findAllForBackfill(Pageable pageable);
 
-    /**
-     * Finds the candidate parent of a variant whose IGDB {@code parent_game} link is missing.
-     * Returns games whose name is a strict prefix of the variant's name followed by
-     * {@code " - "} or {@code ": "}. Caller picks the longest match (most specific parent).
-     */
+    // Strict-prefix + " - "/": " separator match. Caller picks longest = most specific parent.
     @Query("SELECT g FROM Game g WHERE g.id <> :childDbId " +
             "AND (g.category IS NULL OR g.category = 0) " +
             "AND (:childName LIKE CONCAT(g.name, ' - %') OR :childName LIKE CONCAT(g.name, ': %')) " +

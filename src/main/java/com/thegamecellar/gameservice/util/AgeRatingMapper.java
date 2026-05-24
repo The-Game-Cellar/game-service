@@ -2,13 +2,8 @@ package com.thegamecellar.gameservice.util;
 
 import java.util.Map;
 
-/**
- * Translates IGDB raw age-rating ints to display-ready labels.
- *
- * IGDB v4 categories: 1=ESRB, 2=PEGI, 3=CERO, 4=USK, 5=GRAC, 6=CLASS_IND, 7=ACB.
- * Only ESRB and PEGI are mapped to labels for v1; other bodies return null body/label
- * so the frontend skips them in display priority logic.
- */
+// IGDB v4 categories: 1=ESRB, 2=PEGI, 3=CERO, 4=USK, 5=GRAC, 6=CLASS_IND, 7=ACB.
+// Only ESRB + PEGI mapped; others return null so the frontend skips them in display priority.
 public final class AgeRatingMapper {
 
     private static final int CATEGORY_ESRB = 1;
@@ -34,7 +29,6 @@ public final class AgeRatingMapper {
 
     private AgeRatingMapper() {}
 
-    /** Returns body name (e.g. "PEGI") for the IGDB category int, or null if unsupported. */
     public static String body(Integer category) {
         if (category == null) return null;
         return switch (category) {
@@ -44,7 +38,6 @@ public final class AgeRatingMapper {
         };
     }
 
-    /** Returns rating label (e.g. "16", "M") for a category+rating pair, or null if unsupported. */
     public static String label(Integer category, Integer rating) {
         if (category == null || rating == null) return null;
         return switch (category) {

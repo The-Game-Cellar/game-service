@@ -129,13 +129,7 @@ public class IgdbCatalogWorker {
         log.info("Upcoming releases discovery complete: {} new games", newGames);
     }
 
-    /**
-     * Daily refresh over every cached game whose canonical first_release_date is in the
-     * future. Force-overwrites the volatile fields (date, hypes, per-platform releases,
-     * totalRating) so date slips and hype movement propagate within 24h. Sized for the
-     * upcoming subset only, which is typically ~1-3k games even on a 100k catalog, well
-     * inside the daily IGDB rate budget.
-     */
+    // ~1-3k upcoming rows per day, well inside IGDB rate budget. Volatile fields force-overwritten so slips propagate within 24h.
     private void runUpcomingRefresh() {
         java.util.List<Integer> upcomingIds = gameService.findUpcomingIgdbIds();
         int refreshed = 0;

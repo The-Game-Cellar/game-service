@@ -9,13 +9,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * Single-threaded executor for admin-triggered IGDB syncs. Replaces ad-hoc
- * {@code new Thread()} usage in {@link com.thegamecellar.gameservice.controller.AdminController}
- * (guarantees at most one sync runs at a time, surfaces errors through the
- * normal logging pipeline instead of swallowing them on the default uncaught
- * handler, and shuts down cleanly with the application context).
- */
+// Single-threaded executor: at most one admin IGDB sync runs at a time, errors flow through SLF4J, shuts down with the context.
 @Slf4j
 @Component
 public class AdminSyncExecutor {
@@ -28,10 +22,7 @@ public class AdminSyncExecutor {
 
     private final AtomicBoolean syncInProgress = new AtomicBoolean(false);
 
-    /**
-     * Submit a sync task. Returns false if another sync is already in progress
-     * Caller should respond with 409 Conflict in that case.
-     */
+    // Returns false when a sync is already running so the caller can respond with 409 Conflict.
     public boolean trySubmit(String name, Runnable task) {
         if (!syncInProgress.compareAndSet(false, true)) {
             log.info("Admin sync rejected (already in progress): {}", name);
