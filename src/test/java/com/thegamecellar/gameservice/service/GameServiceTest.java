@@ -342,6 +342,108 @@ class GameServiceTest {
         verify(igdbApiClient).searchByGenre("RPG", 20, 0);
     }
 
+    @Test
+    void shouldReturnDbHitsWhenReleasedRangeSet() {
+        Game inRange = Game.builder().id(1L).igdbId(101).name("Half-Life 2")
+                .firstReleaseDate(1101859200L) // Dec 1 2004
+                .genres(new HashSet<>()).platforms(new HashSet<>())
+                .tags(new HashSet<>()).themes(new HashSet<>()).build();
+        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(inRange), Pageable.ofSize(20), 1));
+
+        // Range covers Jan 1 2000 .. Dec 31 2009 in epoch seconds.
+        GameSearchResponse result = gameService.searchGames(
+                null, null, null, "-rating", 0, 20, false, "main", null, null,
+                946684800L, 1262304000L);
+
+        assertThat(result.getGames()).hasSize(1);
+        assertThat(result.getGames().get(0).getIgdbId()).isEqualTo(101);
+        verifyNoInteractions(igdbApiClient);
+    }
+
+    @Test
+    void shouldSkipIgdbFallbackWhenReleasedRangeSet() {
+        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        // Empty DB hit + range set: IGDB has no year-filter support, so fallback is skipped
+        // to avoid misleading broad results.
+        GameSearchResponse result = gameService.searchGames(
+                null, null, "RPG", "-rating", 0, 20, false, "main", null, null,
+                946684800L, 1262304000L);
+
+        assertThat(result.getGames()).isEmpty();
+        assertThat(result.getTotalCount()).isZero();
+        verifyNoInteractions(igdbApiClient);
+    }
+
+    @Test
+    void shouldReturnDbHitsWhenTagsSet() {
+        Game tagged = Game.builder().id(1L).igdbId(202).name("Hollow Knight")
+                .genres(new HashSet<>()).platforms(new HashSet<>())
+                .tags(new HashSet<>()).themes(new HashSet<>()).build();
+        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(tagged), Pageable.ofSize(20), 1));
+
+        GameSearchResponse result = gameService.searchGames(
+                null, null, null, "-rating", 0, 20, false, "main", null, null,
+                null, null, "metroidvania,exploration");
+
+        assertThat(result.getGames()).hasSize(1);
+        assertThat(result.getGames().get(0).getIgdbId()).isEqualTo(202);
+        verifyNoInteractions(igdbApiClient);
+    }
+
+    @Test
+    void shouldSkipIgdbFallbackWhenTagsSet() {
+        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        // IGDB Apicalypse `keywords = (...)` is intentionally not wired; tags trigger empty-fallback
+        // mirror of the year-range / gameMode / perspective pattern.
+        GameSearchResponse result = gameService.searchGames(
+                null, null, "RPG", "-rating", 0, 20, false, "main", null, null,
+                null, null, "metroidvania");
+
+        assertThat(result.getGames()).isEmpty();
+        assertThat(result.getTotalCount()).isZero();
+        verifyNoInteractions(igdbApiClient);
+    }
+
+    @Test
+    void shouldReturnDbHitsWhenRatingFromSet() {
+        Game highRated = Game.builder().id(1L).igdbId(303).name("Disco Elysium")
+                .totalRating(new java.math.BigDecimal("9.10"))
+                .genres(new HashSet<>()).platforms(new HashSet<>())
+                .tags(new HashSet<>()).themes(new HashSet<>()).build();
+        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(highRated), Pageable.ofSize(20), 1));
+
+        GameSearchResponse result = gameService.searchGames(
+                null, null, null, "-rating", 0, 20, false, "main", null, null,
+                null, null, null, new java.math.BigDecimal("8.0"));
+
+        assertThat(result.getGames()).hasSize(1);
+        assertThat(result.getGames().get(0).getIgdbId()).isEqualTo(303);
+        verifyNoInteractions(igdbApiClient);
+    }
+
+    @Test
+    void shouldSkipIgdbFallbackWhenRatingFromSet() {
+        when(gameRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        // IGDB Apicalypse has total_rating filter but our normalize step (igdb-scale 0-100 to 0-10)
+        // can drift, so we skip fallback and return honest empty -- same pattern as year-range / tags.
+        GameSearchResponse result = gameService.searchGames(
+                null, null, "RPG", "-rating", 0, 20, false, "main", null, null,
+                null, null, null, new java.math.BigDecimal("7.0"));
+
+        assertThat(result.getGames()).isEmpty();
+        assertThat(result.getTotalCount()).isZero();
+        verifyNoInteractions(igdbApiClient);
+    }
+
     // ── IGDB catalog worker path ──────────────────────────────────────────────
 
     @Test
