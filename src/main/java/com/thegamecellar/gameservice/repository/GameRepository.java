@@ -14,6 +14,9 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
     Optional<Game> findByIgdbId(Integer igdbId);
     boolean existsByIgdbId(Integer igdbId);
 
+    // Batch fetch via igdb_id IN (...). Used by rec-service worker hydration + read path.
+    List<Game> findByIgdbIdIn(java.util.Collection<Integer> igdbIds);
+
     // Default filter: category IN (0, 8) OR NULL. Remakes count as main games; variants live in the *Variants methods below.
 
     @Query("SELECT DISTINCT g FROM Game g JOIN g.tags t WHERE LOWER(t.name) IN (:tagNames) AND (g.category IN (0, 8) OR g.category IS NULL)")
@@ -160,4 +163,31 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
             "ORDER BY LENGTH(g.name) DESC")
     List<Game> findPrefixParentCandidates(@Param("childName") String childName,
                                            @Param("childDbId") Long childDbId);
+
+    // Source candidates for the similarity worker: main category games that have no rows in
+    // game_similarities yet. Bounded query (Pageable) keeps each tick cheap.
+    @Query(value = """
+            SELECT g.* FROM games g
+            WHERE (g.category IN (0, 8) OR g.category IS NULL)
+              AND g.igdb_id IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM game_similarities s
+                  WHERE s.source_igdb_id = g.igdb_id
+              )
+            ORDER BY g.id ASC
+            """, nativeQuery = true)
+    List<Game> findUncomputedSimilaritySources(org.springframework.data.domain.Pageable pageable);
+
+    // Peer pool for Jaccard scoring. Main category, has rating signal, capped to keep
+    // the per-tick comparison loop bounded.
+    @Query(value = """
+            SELECT g.* FROM games g
+            WHERE (g.category IN (0, 8) OR g.category IS NULL)
+              AND g.igdb_id IS NOT NULL
+              AND g.total_rating IS NOT NULL
+              AND g.total_rating_count > 0
+            ORDER BY RANDOM()
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<Game> findRandomMainGamesForSimilarity(@Param("limit") int limit);
 }

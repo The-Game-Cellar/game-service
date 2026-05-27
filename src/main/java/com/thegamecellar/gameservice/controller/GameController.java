@@ -41,8 +41,14 @@ public class GameController {
             @RequestParam(defaultValue = "-rating") @Pattern(regexp = "-rating|-released|released|name|-name") String ordering,
             @RequestParam(defaultValue = "0") @Min(0) @Max(500) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize,
-            @RequestParam(defaultValue = "false") boolean dbOnly) {
-        return ResponseEntity.ok(gameService.searchGames(query, platform, genre, ordering, page, pageSize, dbOnly, gameType, gameMode, perspective));
+            @RequestParam(defaultValue = "false") boolean dbOnly,
+            @RequestParam(required = false) Long releasedFrom,
+            @RequestParam(required = false) Long releasedTo,
+            @RequestParam(required = false) String tags,
+            @RequestParam(required = false) java.math.BigDecimal ratingFrom) {
+        return ResponseEntity.ok(gameService.searchGames(
+                query, platform, genre, ordering, page, pageSize, dbOnly,
+                gameType, gameMode, perspective, releasedFrom, releasedTo, tags, ratingFrom));
     }
 
     @GetMapping("/popular")
@@ -145,5 +151,15 @@ public class GameController {
     @GetMapping("/{igdbId}/editions")
     public ResponseEntity<List<GameResponse>> getEditionsOf(@PathVariable @Min(1) Integer igdbId) {
         return ResponseEntity.ok(gameService.getEditionsOf(igdbId));
+    }
+
+    // Pre-computed similar games (catalog-side). Reads top-K from game_similarities then
+    // hydrates via the games table in one round-trip. Replaces rec-service's old genre-overlap
+    // search loop for /similar; that path stays in rec-service only for /because-you-liked
+    // which composes similar + library exclusion.
+    @GetMapping("/{igdbId}/similar")
+    public ResponseEntity<List<GameResponse>> getSimilar(@PathVariable @Min(1) Integer igdbId,
+                                                         @RequestParam(defaultValue = "10") @Min(1) @Max(50) int limit) {
+        return ResponseEntity.ok(gameService.getSimilarGames(igdbId, limit));
     }
 }

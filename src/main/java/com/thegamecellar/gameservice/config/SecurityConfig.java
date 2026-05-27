@@ -29,6 +29,9 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/v3/api-docs/**", "/v3/api-docs").permitAll()
+                        // Worker compute path (rec-service) calls these without a user JWT.
+                        // InternalAuthFilter enforces X-Internal-Token shared-secret upstream.
+                        .requestMatchers("/internal/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2

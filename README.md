@@ -42,8 +42,8 @@ Game Service is read-mostly: the frontend and the other backend services pull ca
 
 Two ingestion paths share the local cache:
 
-- **User-triggered (`getGameById`)** — narrow stale check: returns immediately if the cached row has core data; refetches from IGDB only when `tags`, `genres`, `description`, or `developers` are missing. Each refresh costs an IGDB round trip, so the bar is high.
-- **Worker / search-side (`cacheIfAbsent`)** — wider stale check: refreshes when any of `tags`, `genres`, `description`, `developers`, `category`, `rating_count`, `screenshots`, `videos`, `dlc_ids`, `expansion_ids`, `similar_game_ids`, `age_ratings`, `release_dates`, `multiplayer_modes` is missing. The DTO is already in hand, so the marginal cost is zero.
+- **User-triggered (`getGameById`)**: narrow stale check. Returns immediately if the cached row has core data; refetches from IGDB only when `tags`, `genres`, `description`, or `developers` are missing. Each refresh costs an IGDB round trip, so the bar is high.
+- **Worker / search-side (`cacheIfAbsent`)**: wider stale check. Refreshes when any of `tags`, `genres`, `description`, `developers`, `category`, `rating_count`, `screenshots`, `videos`, `dlc_ids`, `expansion_ids`, `similar_game_ids`, `age_ratings`, `release_dates`, `multiplayer_modes` is missing. The DTO is already in hand, so the marginal cost is zero.
 
 Genre-only searches use a three-step fallback: genre cache hit, broad pool fallback (recent cached games re-ranked by similarity), then IGDB.
 
@@ -71,7 +71,7 @@ A small set of columns are stored as JSON-as-`TEXT` (`screenshots`, `videos`, `d
 
 | Method | Path                                  | Description                                                                                              |
 |--------|---------------------------------------|----------------------------------------------------------------------------------------------------------|
-| GET    | `/api/v1/games/search`                | Search with `query`, `platform`, `genre`. `pageSize` max 100, `page` 0–500.                              |
+| GET    | `/api/v1/games/search`                | Search with `query`, `platform`, `genre` (CSV, AND-match), `gameMode` (CSV, AND-match), `perspective` (CSV, AND-match), `gameType`, `ordering`, `releasedFrom`/`releasedTo` (epoch seconds), `tags` (CSV, AND-match), `ratingFrom` (BigDecimal, floor on `totalRating`). Response includes `availableTagCounts` / `availableGenreCounts` / `availableGameModeCounts` / `availablePerspectiveCounts` maps for count-badge + grayed-out UI (populated only when at least one user-filter active, cold-path skip otherwise). `pageSize` max 100, `page` 0-500. |
 | GET    | `/api/v1/games/{igdbId}`              | Full game detail by IGDB ID.                                                                             |
 | GET    | `/api/v1/games/popular`               | Popular games, optional platform filter.                                                                 |
 | GET    | `/api/v1/games/upcoming`              | Upcoming releases in the next 12 months.                                                                 |
@@ -94,6 +94,16 @@ A small set of columns are stored as JSON-as-`TEXT` (`screenshots`, `videos`, `d
 | POST   | `/api/v1/admin/backfill-developers`           | One-shot loop over rows with `developers IS NULL`.                |
 | GET    | `/api/v1/admin/sync/status`                   | `{ running: bool }`.                                              |
 
+### Internal service-to-service (no user JWT)
+
+| Method | Path                                          | Description                                                       |
+|--------|-----------------------------------------------|-------------------------------------------------------------------|
+| GET    | `/internal/games/{igdbId}`                    | Single game (used by similar-graph traversal in worker).          |
+| GET    | `/internal/games/popular?platform=...`        | Popular games per platform (Tier-3 fallback in worker).           |
+| GET    | `/internal/games/random-quality?genre=...`    | Random-quality candidates by genre (Tier-1/2 in worker).          |
+
+Used by the recommendation-service per-user worker. Protected by `InternalAuthFilter`: requires header `X-Internal-Token: {INTERNAL_SERVICE_TOKEN}` (constant-time compare, fail-closed when the env var is unset). The api-gateway has no route for `/internal/**`, so the paths are only reachable inside the docker network.
+
 ## Configuration
 
 | Variable                              | Default                            | Purpose                                          |
@@ -113,6 +123,7 @@ A small set of columns are stored as JSON-as-`TEXT` (`screenshots`, `videos`, `d
 | `IGDB_WORKER_ENRICHMENT_LIMIT`        | `400`                              | Stubs to enrich per run                          |
 | `IGDB_WORKER_CRON`                    | `0 30 3 * * *`                     | Cron expression (default 03:30 daily)            |
 | `IGDB_WORKER_RATE_LIMIT_DELAY_MS`     | `250`                              | Delay between IGDB calls inside the worker       |
+| `INTERNAL_SERVICE_TOKEN`              | (required for /internal/** auth)   | Shared secret accepted by `InternalAuthFilter` on `/internal/**`. Fail-closed when unset. |
 
 Register an application at [dev.twitch.tv/console](https://dev.twitch.tv/console) to obtain `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET`. IGDB inherits Twitch OAuth.
 
