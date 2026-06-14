@@ -5,7 +5,9 @@ import com.thegamecellar.gameservice.model.dto.GameSearchResponse;
 import com.thegamecellar.gameservice.model.dto.GenresResponse;
 import com.thegamecellar.gameservice.model.dto.PlatformsResponse;
 import com.thegamecellar.gameservice.model.dto.PopularTagsResponse;
+import com.thegamecellar.gameservice.model.dto.UpcomingGamesRequest;
 import com.thegamecellar.gameservice.service.GameService;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
@@ -58,34 +60,18 @@ public class GameController {
         return ResponseEntity.ok(gameService.getPopularGames(platform, page));
     }
 
-    private static final int EXCLUDE_IDS_MAX = 100;
-
-    @GetMapping("/upcoming")
-    public ResponseEntity<GameSearchResponse> getUpcomingGames(
-            @RequestParam(required = false) String platform,
-            @RequestParam(defaultValue = "90") @Min(0) @Max(3650) int windowDays,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
-            @RequestParam(required = false) String excludeIds) {
-        List<String> platforms = (platform == null || platform.isBlank())
+    @PostMapping("/upcoming")
+    public ResponseEntity<GameSearchResponse> getUpcomingGames(@Valid @RequestBody(required = false) UpcomingGamesRequest request) {
+        UpcomingGamesRequest req = (request == null) ? new UpcomingGamesRequest() : request;
+        List<String> platforms = (req.getPlatform() == null || req.getPlatform().isBlank())
                 ? List.of()
-                : List.of(platform.split(","));
-        java.util.Set<Integer> exclude = java.util.Set.of();
-        if (excludeIds != null && !excludeIds.isBlank()) {
-            String[] parts = excludeIds.split(",");
-            if (parts.length > EXCLUDE_IDS_MAX) {
-                throw new IllegalArgumentException(
-                        "excludeIds exceeds maximum of " + EXCLUDE_IDS_MAX + " entries");
-            }
-            exclude = java.util.Arrays.stream(parts)
-                    .map(String::trim)
-                    .filter(s -> !s.isEmpty())
-                    .map(s -> {
-                        try { return Integer.parseInt(s); } catch (NumberFormatException e) { return null; }
-                    })
-                    .filter(java.util.Objects::nonNull)
-                    .collect(java.util.stream.Collectors.toSet());
-        }
-        return ResponseEntity.ok(gameService.getUpcomingGames(platforms, windowDays, limit, exclude));
+                : List.of(req.getPlatform().split(","));
+        java.util.Set<Integer> exclude = (req.getExcludeIds() == null) ? java.util.Set.of() : req.getExcludeIds();
+        List<Integer> recentlyShown = (req.getRecentlyShownIds() == null) ? List.of() : req.getRecentlyShownIds();
+        int windowDays = (req.getWindowDays() == null) ? 90 : req.getWindowDays();
+        int limit = (req.getLimit() == null) ? 20 : req.getLimit();
+        return ResponseEntity.ok(gameService.getUpcomingGames(
+                platforms, windowDays, limit, exclude, recentlyShown, req.getPage(), req.getPageSize()));
     }
 
     @GetMapping("/upcoming/platforms")
@@ -95,7 +81,7 @@ public class GameController {
 
     @GetMapping("/random")
     public ResponseEntity<GameSearchResponse> getRandomGames(
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
+            @RequestParam(defaultValue = "20") @Min(1) @Max(500) int limit) {
         return ResponseEntity.ok(gameService.getRandomGames(limit));
     }
 

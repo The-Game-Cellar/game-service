@@ -538,7 +538,7 @@ class GameServiceTest {
     void getUpcomingReturnsEmptyWhenPoolEmpty() {
         when(gameRepository.findUpcoming(anyLong(), anyLong())).thenReturn(List.of());
 
-        List<GameResponse> result = gameService.getUpcoming(List.of(), 90, 10, java.util.Set.of());
+        List<GameResponse> result = gameService.getUpcoming(List.of(), 90, 10, java.util.Set.of(), java.util.List.of());
 
         assertThat(result).isEmpty();
     }
@@ -549,7 +549,7 @@ class GameServiceTest {
         when(gameRepository.findUpcomingByPlatforms(anyLong(), anyLong(), anyList()))
                 .thenReturn(List.of(upcoming));
 
-        List<GameResponse> result = gameService.getUpcoming(List.of("PC"), 90, 5, java.util.Set.of());
+        List<GameResponse> result = gameService.getUpcoming(List.of("PC"), 90, 5, java.util.Set.of(), java.util.List.of());
 
         assertThat(result).hasSize(1);
         verify(gameRepository).findUpcomingByPlatforms(anyLong(), anyLong(), eq(List.of("pc")));
@@ -562,7 +562,7 @@ class GameServiceTest {
         when(gameRepository.findUpcomingByPlatforms(anyLong(), anyLong(), anyList()))
                 .thenReturn(List.of(g, g, g));
 
-        List<GameResponse> result = gameService.getUpcoming(List.of("PC", "PlayStation 5"), 90, 5, java.util.Set.of());
+        List<GameResponse> result = gameService.getUpcoming(List.of("PC", "PlayStation 5"), 90, 5, java.util.Set.of(), java.util.List.of());
 
         assertThat(result).hasSize(1);
     }
@@ -575,13 +575,13 @@ class GameServiceTest {
         }
         when(gameRepository.findUpcoming(anyLong(), anyLong())).thenReturn(pool);
 
-        List<GameResponse> result = gameService.getUpcoming(List.of(), 90, 5, java.util.Set.of());
+        List<GameResponse> result = gameService.getUpcoming(List.of(), 90, 5, java.util.Set.of(), java.util.List.of());
 
         assertThat(result).hasSize(5);
     }
 
     @Test
-    void getUpcomingFallsBackToUniformWhenAllHypesAreZeroOrNull() {
+    void getUpcomingIgnoresHypesAndSamplesByInverseDays() {
         List<Game> pool = List.of(
                 upcomingGame(3001, "A", null),
                 upcomingGame(3002, "B", 0),
@@ -589,16 +589,52 @@ class GameServiceTest {
         );
         when(gameRepository.findUpcoming(anyLong(), anyLong())).thenReturn(pool);
 
-        List<GameResponse> result = gameService.getUpcoming(List.of(), 90, 3, java.util.Set.of());
+        List<GameResponse> result = gameService.getUpcoming(List.of(), 90, 3, java.util.Set.of(), java.util.List.of());
 
         assertThat(result).hasSize(3);
+    }
+
+    @Test
+    void getUpcomingAcceptsRecentlyShownIdsWithoutCrashing() {
+        Game a = upcomingGame(6001, "A", null);
+        Game b = upcomingGame(6002, "B", null);
+        when(gameRepository.findUpcoming(anyLong(), anyLong())).thenReturn(List.of(a, b));
+
+        List<GameResponse> result = gameService.getUpcoming(
+                List.of(), 90, 5, java.util.Set.of(), java.util.List.of(6001));
+
+        assertThat(result).hasSize(2);
+    }
+
+    @Test
+    void getUpcomingPicksAreBoundedByOversampleCap() {
+        List<Game> pool = new ArrayList<>();
+        long now = java.time.Instant.now().getEpochSecond();
+        for (int i = 0; i < 200; i++) {
+            pool.add(Game.builder()
+                    .id((long) (8000 + i))
+                    .igdbId(8000 + i)
+                    .name("G" + i)
+                    .firstReleaseDate(now + (long) (i + 1) * 24 * 3600)
+                    .genres(new HashSet<>()).platforms(new HashSet<>())
+                    .tags(new HashSet<>()).themes(new HashSet<>())
+                    .gameModes(new HashSet<>()).build());
+        }
+        when(gameRepository.findUpcoming(anyLong(), anyLong())).thenReturn(pool);
+
+        List<GameResponse> result = gameService.getUpcoming(
+                List.of(), 0, 20, java.util.Set.of(), java.util.List.of());
+
+        assertThat(result).hasSize(20);
+        // OVERSAMPLE_UPCOMING=50 picks the 50 closest-to-today; sampled ids must come from [8000, 8049].
+        result.forEach(g -> assertThat(g.getIgdbId()).isBetween(8000, 8049));
     }
 
     @Test
     void getUpcomingZeroLimitReturnsEmpty() {
         when(gameRepository.findUpcoming(anyLong(), anyLong())).thenReturn(List.of(upcomingGame(4001, "X", 100)));
 
-        List<GameResponse> result = gameService.getUpcoming(List.of(), 90, 0, java.util.Set.of());
+        List<GameResponse> result = gameService.getUpcoming(List.of(), 90, 0, java.util.Set.of(), java.util.List.of());
 
         assertThat(result).isEmpty();
     }
@@ -609,10 +645,75 @@ class GameServiceTest {
         Game fresh = upcomingGame(5002, "Not Yet Owned", 50);
         when(gameRepository.findUpcoming(anyLong(), anyLong())).thenReturn(List.of(owned, fresh));
 
-        List<GameResponse> result = gameService.getUpcoming(List.of(), 90, 5, java.util.Set.of(5001));
+        List<GameResponse> result = gameService.getUpcoming(List.of(), 90, 5, java.util.Set.of(5001), java.util.List.of());
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getIgdbId()).isEqualTo(5002);
+    }
+
+    @Test
+    void getUpcomingPageSortsAscendingByReleaseDateAndSlicesByPage() {
+        List<Game> pool = new ArrayList<>();
+        long now = java.time.Instant.now().getEpochSecond();
+        for (int i = 0; i < 25; i++) {
+            pool.add(Game.builder()
+                    .id((long) (9000 + i))
+                    .igdbId(9000 + i)
+                    .name("G" + i)
+                    .firstReleaseDate(now + (long) (i + 1) * 24 * 3600)
+                    .genres(new HashSet<>()).platforms(new HashSet<>())
+                    .tags(new HashSet<>()).themes(new HashSet<>())
+                    .gameModes(new HashSet<>()).build());
+        }
+        when(gameRepository.findUpcoming(anyLong(), anyLong())).thenReturn(pool);
+
+        var page0 = gameService.getUpcomingPage(List.of(), 0, java.util.Set.of(), 0, 10);
+        var page1 = gameService.getUpcomingPage(List.of(), 0, java.util.Set.of(), 1, 10);
+        var page2 = gameService.getUpcomingPage(List.of(), 0, java.util.Set.of(), 2, 10);
+
+        assertThat(page0.totalCount()).isEqualTo(25);
+        assertThat(page0.games()).hasSize(10);
+        assertThat(page0.games().get(0).getIgdbId()).isEqualTo(9000);
+        assertThat(page0.games().get(9).getIgdbId()).isEqualTo(9009);
+        assertThat(page1.games()).hasSize(10);
+        assertThat(page1.games().get(0).getIgdbId()).isEqualTo(9010);
+        assertThat(page2.games()).hasSize(5);
+        assertThat(page2.games().get(0).getIgdbId()).isEqualTo(9020);
+        assertThat(page2.games().get(4).getIgdbId()).isEqualTo(9024);
+    }
+
+    @Test
+    void getUpcomingPageOutOfRangeReturnsEmptyWithCorrectTotal() {
+        Game g = upcomingGame(9100, "Single", null);
+        when(gameRepository.findUpcoming(anyLong(), anyLong())).thenReturn(List.of(g));
+
+        var page = gameService.getUpcomingPage(List.of(), 90, java.util.Set.of(), 5, 10);
+
+        assertThat(page.games()).isEmpty();
+        assertThat(page.totalCount()).isEqualTo(1);
+    }
+
+    @Test
+    void getUpcomingPageDeterministicAcrossCalls() {
+        List<Game> pool = new ArrayList<>();
+        long now = java.time.Instant.now().getEpochSecond();
+        for (int i = 0; i < 15; i++) {
+            pool.add(Game.builder()
+                    .id((long) (9200 + i))
+                    .igdbId(9200 + i)
+                    .name("G" + i)
+                    .firstReleaseDate(now + (long) (i + 1) * 24 * 3600)
+                    .genres(new HashSet<>()).platforms(new HashSet<>())
+                    .tags(new HashSet<>()).themes(new HashSet<>())
+                    .gameModes(new HashSet<>()).build());
+        }
+        when(gameRepository.findUpcoming(anyLong(), anyLong())).thenReturn(pool);
+
+        var first = gameService.getUpcomingPage(List.of(), 0, java.util.Set.of(), 0, 5);
+        var second = gameService.getUpcomingPage(List.of(), 0, java.util.Set.of(), 0, 5);
+
+        assertThat(first.games().stream().map(GameResponse::getIgdbId).toList())
+                .isEqualTo(second.games().stream().map(GameResponse::getIgdbId).toList());
     }
 
     @Test

@@ -521,9 +521,24 @@ public class GameService {
     }
 
     // DB-only read path; worker keeps upcoming rows fresh so no IGDB call here.
+    // page == null = Dashboard sample mode (variation per refresh, recently-shown penalty applied).
+    // page != null = Explore browse mode (deterministic sort by release-date ASC, stable across refreshes).
     @Transactional(readOnly = true)
-    public GameSearchResponse getUpcomingGames(List<String> platforms, int windowDays, int limit, java.util.Set<Integer> excludeIgdbIds) {
-        List<GameResponse> games = getUpcoming(platforms, windowDays, limit, excludeIgdbIds);
+    public GameSearchResponse getUpcomingGames(List<String> platforms, int windowDays, int limit,
+                                               java.util.Set<Integer> excludeIgdbIds,
+                                               java.util.List<Integer> recentlyShownIds,
+                                               Integer page, Integer pageSize) {
+        if (page != null) {
+            int ps = (pageSize == null) ? 20 : pageSize;
+            UpcomingPage pageResult = getUpcomingPage(platforms, windowDays, excludeIgdbIds, page, ps);
+            return GameSearchResponse.builder()
+                    .games(pageResult.games())
+                    .totalCount(pageResult.totalCount())
+                    .page(page)
+                    .pageSize(ps)
+                    .build();
+        }
+        List<GameResponse> games = getUpcoming(platforms, windowDays, limit, excludeIgdbIds, recentlyShownIds);
         return GameSearchResponse.builder()
                 .games(games)
                 .totalCount(games.size())
@@ -765,9 +780,13 @@ public class GameService {
 
     // ── Coming Soon read path ─────────────────────────────────────────────────
 
-    // Hype-weighted sample without replacement. Null hypes = 0 weight (only picked when all remaining are 0).
+    // Inverse-days A-Res weighted sample. Closer-to-today games dominate in expectation;
+    // recently-shown ids get their weight multiplied by SHOWN_PENALTY so refresh produces
+    // visible variety. Oversampled to top-OVERSAMPLE_UPCOMING by release date before sampling.
     @Transactional(readOnly = true)
-    public List<GameResponse> getUpcoming(List<String> platformFilter, int windowDays, int limit, java.util.Set<Integer> excludeIgdbIds) {
+    public List<GameResponse> getUpcoming(List<String> platformFilter, int windowDays, int limit,
+                                          java.util.Set<Integer> excludeIgdbIds,
+                                          java.util.List<Integer> recentlyShownIds) {
         long now = java.time.Instant.now().getEpochSecond();
         // windowDays <= 0 = unbounded ("All" toggle); Long.MAX_VALUE degenerates BETWEEN to "any future date".
         long horizonEnd = (windowDays <= 0)
@@ -799,39 +818,96 @@ public class GameService {
         List<Game> unique = new ArrayList<>(uniqueMap.values());
         if (unique.isEmpty()) return List.of();
 
-        return weightedSampleByHype(unique, limit).stream()
+        // Sort ascending by release date so the top-OVERSAMPLE are the closest-to-today candidates;
+        // beyond that the inverse-days weight falls so steeply that further entries contribute negligible mass.
+        unique.sort(java.util.Comparator.comparingLong(g ->
+                g.getFirstReleaseDate() == null ? Long.MAX_VALUE : g.getFirstReleaseDate()));
+        if (unique.size() > OVERSAMPLE_UPCOMING) {
+            unique = new java.util.ArrayList<>(unique.subList(0, OVERSAMPLE_UPCOMING));
+        }
+
+        java.util.Set<Integer> recentSet = (recentlyShownIds == null || recentlyShownIds.isEmpty())
+                ? java.util.Set.of()
+                : new java.util.HashSet<>(recentlyShownIds);
+
+        return weightedSampleByInverseDays(unique, now, recentSet, limit).stream()
                 .map(GameMapper::toResponse)
                 .toList();
     }
 
-    private List<Game> weightedSampleByHype(List<Game> candidates, int limit) {
-        java.util.List<Game> remaining = new java.util.ArrayList<>(candidates);
-        java.util.List<Game> picked = new java.util.ArrayList<>(Math.min(limit, candidates.size()));
-        java.util.concurrent.ThreadLocalRandom rng = java.util.concurrent.ThreadLocalRandom.current();
+    // Deterministic browse mode: sort by release date ASC, slice page. No sampling, no recency penalty.
+    public record UpcomingPage(List<GameResponse> games, int totalCount) {}
 
-        while (!remaining.isEmpty() && picked.size() < limit) {
-            long totalWeight = 0L;
-            for (Game g : remaining) {
-                Integer h = g.getHypes();
-                totalWeight += (h != null && h > 0) ? h : 0;
-            }
-            if (totalWeight == 0) {
-                Game g = remaining.remove(rng.nextInt(remaining.size()));
-                picked.add(g);
-                continue;
-            }
-            long roll = rng.nextLong(totalWeight);
-            long cum = 0;
-            int idx = remaining.size() - 1;
-            for (int i = 0; i < remaining.size(); i++) {
-                Integer h = remaining.get(i).getHypes();
-                long w = (h != null && h > 0) ? h : 0;
-                cum += w;
-                if (roll < cum) { idx = i; break; }
-            }
-            picked.add(remaining.remove(idx));
+    @Transactional(readOnly = true)
+    public UpcomingPage getUpcomingPage(List<String> platformFilter, int windowDays,
+                                         java.util.Set<Integer> excludeIgdbIds,
+                                         int page, int pageSize) {
+        long now = java.time.Instant.now().getEpochSecond();
+        long horizonEnd = (windowDays <= 0)
+                ? Long.MAX_VALUE
+                : now + (long) windowDays * 24L * 60L * 60L;
+
+        List<Game> pool;
+        if (platformFilter != null && !platformFilter.isEmpty()) {
+            List<String> lowered = platformFilter.stream()
+                    .filter(p -> p != null && !p.isBlank())
+                    .map(String::toLowerCase)
+                    .toList();
+            pool = lowered.isEmpty()
+                    ? gameRepository.findUpcoming(now, horizonEnd)
+                    : gameRepository.findUpcomingByPlatforms(now, horizonEnd, lowered);
+        } else {
+            pool = gameRepository.findUpcoming(now, horizonEnd);
         }
-        return picked;
+        if (pool.isEmpty()) return new UpcomingPage(List.of(), 0);
+
+        java.util.Set<Integer> exclude = excludeIgdbIds == null ? java.util.Set.of() : excludeIgdbIds;
+        java.util.LinkedHashMap<Integer, Game> uniqueMap = new java.util.LinkedHashMap<>();
+        for (Game g : pool) {
+            if (exclude.contains(g.getIgdbId())) continue;
+            uniqueMap.putIfAbsent(g.getIgdbId(), g);
+        }
+        List<Game> unique = new java.util.ArrayList<>(uniqueMap.values());
+        if (unique.isEmpty()) return new UpcomingPage(List.of(), 0);
+
+        unique.sort(java.util.Comparator.comparingLong(g ->
+                g.getFirstReleaseDate() == null ? Long.MAX_VALUE : g.getFirstReleaseDate()));
+
+        int total = unique.size();
+        int from = Math.max(0, page * pageSize);
+        if (from >= total) return new UpcomingPage(List.of(), total);
+        int to = Math.min(total, from + pageSize);
+        List<GameResponse> slice = unique.subList(from, to).stream()
+                .map(GameMapper::toResponse)
+                .toList();
+        return new UpcomingPage(slice, total);
+    }
+
+    static final int OVERSAMPLE_UPCOMING = 50;
+    static final double UPCOMING_SHOWN_PENALTY = 0.5;
+    private static final long SECONDS_PER_DAY = 86400L;
+
+    static List<Game> weightedSampleByInverseDays(List<Game> candidates, long nowEpochSeconds,
+                                                  java.util.Set<Integer> recentlyShown, int limit) {
+        if (candidates.isEmpty() || limit <= 0) return List.of();
+        java.util.concurrent.ThreadLocalRandom rng = java.util.concurrent.ThreadLocalRandom.current();
+        record Scored(Game game, double key) {}
+        List<Scored> scored = new java.util.ArrayList<>(candidates.size());
+        for (Game g : candidates) {
+            Long release = g.getFirstReleaseDate();
+            if (release == null) continue;
+            long daysAway = Math.max(0L, (release - nowEpochSeconds) / SECONDS_PER_DAY);
+            double weight = 1.0 / (daysAway + 1.0);
+            if (g.getIgdbId() != null && recentlyShown.contains(g.getIgdbId())) {
+                weight *= UPCOMING_SHOWN_PENALTY;
+            }
+            if (weight <= 0.0) continue;
+            double u = Math.max(rng.nextDouble(), 1e-12);
+            double key = Math.pow(u, 1.0 / weight);
+            scored.add(new Scored(g, key));
+        }
+        scored.sort(java.util.Comparator.comparingDouble(Scored::key).reversed());
+        return scored.stream().limit(limit).map(Scored::game).toList();
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

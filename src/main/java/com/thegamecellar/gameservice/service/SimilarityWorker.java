@@ -40,6 +40,10 @@ public class SimilarityWorker {
     private final GameRepository gameRepository;
     private final GameSimilarityRepository similarityRepository;
 
+    // Tracks whether the previous tick still had uncomputed sources, so we can log a single
+    // INFO line on the pending → done transition instead of a heartbeat per tick.
+    private boolean previousTickHadPending = false;
+
     // Initial delay long enough that the IGDB catalog worker grabs the early CPU at boot. Per-tick
     // load is bounded by BATCH so a 1m delay keeps DB pressure modest.
     @Scheduled(fixedDelayString = "${similarity.worker.fixed-delay-ms:60000}",
@@ -49,7 +53,14 @@ public class SimilarityWorker {
         // Pick BATCH games that don't already have similarity rows. Main category only so we
         // don't burn cycles on DLC/Bundle entries.
         List<Game> candidates = gameRepository.findUncomputedSimilaritySources(PageRequest.of(0, BATCH));
-        if (candidates.isEmpty()) return;
+        if (candidates.isEmpty()) {
+            if (previousTickHadPending) {
+                log.info("SimilarityWorker catalog backfill complete");
+                previousTickHadPending = false;
+            }
+            return;
+        }
+        previousTickHadPending = true;
 
         // Pre-fetch a broad pool to compare against. Limiting to recent + rated games keeps
         // the working set small; bulk catalog coverage builds up over many ticks.
@@ -99,7 +110,7 @@ public class SimilarityWorker {
             }
         }
         if (computed > 0) {
-            log.info("SimilarityWorker computed similarities for {} games this tick", computed);
+            log.debug("SimilarityWorker computed similarities for {} games this tick", computed);
         }
     }
 
