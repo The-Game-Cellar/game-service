@@ -49,7 +49,7 @@ igdb:
   worker:
     enabled: ${IGDB_WORKER_ENABLED:true}
     discovery-limit: ${IGDB_WORKER_DISCOVERY_LIMIT:500}
-    discovery-pages: ${IGDB_WORKER_DISCOVERY_PAGES:200}
+    discovery-pages: ${IGDB_WORKER_DISCOVERY_PAGES:50}
     new-releases-pages: ${IGDB_WORKER_NEW_RELEASES_PAGES:10}
     cron: ${IGDB_WORKER_CRON:0 30 3 * * *}
     rate-limit-delay-ms: ${IGDB_WORKER_RATE_LIMIT_DELAY_MS:250}

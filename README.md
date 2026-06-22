@@ -118,7 +118,7 @@ Used by the recommendation-service per-user worker. Protected by `InternalAuthFi
 | `TWITCH_CLIENT_SECRET`                | _none_                             | Twitch app secret                                |
 | `IGDB_API_BASE_URL`                   | `https://api.igdb.com/v4`          | Override only for testing against a mock         |
 | `IGDB_WORKER_ENABLED`                 | `true`                             | Master switch for the nightly worker             |
-| `IGDB_WORKER_DISCOVERY_PAGES`         | `200`                              | Pages per nightly run                            |
+| `IGDB_WORKER_DISCOVERY_PAGES`         | `50`                               | Pages per nightly run (50 x 500 = 25k)           |
 | `IGDB_WORKER_DISCOVERY_LIMIT`         | `500`                              | Games per page (IGDB max)                        |
 | `IGDB_WORKER_ENRICHMENT_LIMIT`        | `400`                              | Stubs to enrich per run                          |
 | `IGDB_WORKER_CRON`                    | `0 30 3 * * *`                     | Cron expression (default 03:30 daily)            |
