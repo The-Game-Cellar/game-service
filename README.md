@@ -2,6 +2,7 @@
 
 > IGDB API client and local game catalog cache. Serves search, browse, and game-detail data to the rest of the system and runs a nightly background worker that walks IGDB to keep the cache warm.
 
+[![CI](https://github.com/The-Game-Cellar/game-service/actions/workflows/ci.yml/badge.svg)](https://github.com/The-Game-Cellar/game-service/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-17-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0-brightgreen)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791)
