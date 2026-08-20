@@ -14,6 +14,7 @@ import com.thegamecellar.gameservice.util.CuratedTagAllowlist;
 import com.thegamecellar.gameservice.util.DerivedGenreEngine;
 import com.thegamecellar.gameservice.util.GameMapper;
 import com.thegamecellar.gameservice.util.IgdbPlatformMapper;
+import com.thegamecellar.gameservice.util.PlatformCuration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -54,6 +55,7 @@ public class GameCacheService {
     private final GameCollectionRepository gameCollectionRepository;
     private final CuratedTagAllowlist curatedTagAllowlist;
     private final DerivedGenreEngine derivedGenreEngine;
+    private final PlatformCuration platformCuration;
 
     // REQUIRES_NEW so a concurrent-insert rollback doesn't poison the caller's transaction.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -239,9 +241,15 @@ public class GameCacheService {
             String canonical = IgdbPlatformMapper.normalize(p.getName());
             if (canonical == null || canonical.isBlank()) continue;
             result.add(platformRepository.findByName(canonical)
-                    .orElseGet(() -> platformRepository.save(new Platform(canonical))));
+                    .orElseGet(() -> platformRepository.save(curated(new Platform(canonical)))));
         }
         return result;
+    }
+
+    // Curation is applied at insert time because platform rows appear here, mid-sync, not in any migration.
+    private Platform curated(Platform platform) {
+        platformCuration.apply(platform);
+        return platform;
     }
 
     private Set<Genre> resolveGenres(IgdbGameDto dto) {

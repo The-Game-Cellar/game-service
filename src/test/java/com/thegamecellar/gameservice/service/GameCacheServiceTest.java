@@ -44,7 +44,8 @@ class GameCacheServiceTest {
                 mock(com.thegamecellar.gameservice.repository.FranchiseRepository.class),
                 mock(com.thegamecellar.gameservice.repository.GameCollectionRepository.class),
                 mock(com.thegamecellar.gameservice.util.CuratedTagAllowlist.class),
-                derivedGenreEngine
+                derivedGenreEngine,
+                mock(com.thegamecellar.gameservice.util.PlatformCuration.class)
         );
     }
 
