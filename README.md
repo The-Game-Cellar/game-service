@@ -64,7 +64,7 @@ Plus the join tables: `game_genres`, `game_tags`, `game_themes`, `game_platforms
 
 A small set of columns are stored as JSON-as-`TEXT` (`screenshots`, `videos`, `dlc_ids`, `expansion_ids`, `similar_game_ids`, `age_ratings`, `release_dates`, `multiplayer_modes`) since nothing queries into them; they round-trip through the mapper.
 
-`platforms` carries three curation columns (`is_preference_eligible BOOLEAN`, `category VARCHAR(20)`, `display_order INT`) used by `/api/v1/platforms/catalog` to drive the Preferences picker. Curation is manual via Flyway / SQL.
+`platforms` carries three curation columns (`is_preference_eligible BOOLEAN`, `category VARCHAR(20)`, `display_order INT`) used by `/api/v1/platforms/catalog` to drive the Preferences picker. Curation is declared in `src/main/resources/platform-curation.yaml` and is authoritative in both directions: a platform listed there is flagged eligible with its category and order, one absent from it is reset to the column defaults. Platform rows are created by the IGDB catalog sync at runtime, not by a migration, so the file is applied twice: `GameCacheService` curates a row as it inserts it, and `PlatformCurationReconciler` reconciles every existing row at startup. Edit the file and restart the service.
 
 ## API Endpoints
 

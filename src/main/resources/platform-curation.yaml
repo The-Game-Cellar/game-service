@@ -1,0 +1,112 @@
+# Platform curation: which platforms appear in the user-facing Preferences picker,
+# how they are grouped, and in what order.
+#
+# Top-level key = category (manufacturer grouping) used to lay out the picker.
+# Each entry sets is_preference_eligible = TRUE on the matching `platforms` row and
+# fills in category + display_order. Platforms absent from this file keep the column
+# defaults (is_preference_eligible = FALSE, display_order = 999): they still attach to
+# games and still show on Add-to-Library / Library filter / Game Detail metadata, they
+# are just hidden from the Preferences UI.
+#
+# `name` must match the canonical platform name exactly, i.e. the IGDB platform name
+# after IgdbPlatformMapper.normalize() has collapsed variants ("PlayStation 5 Pro" ->
+# "PlayStation 5"). A name with no matching row is reported at startup and ignored.
+#
+# `order` sorts inside a category, lowest first. Gaps are deliberate so new platforms
+# can be slotted in without renumbering the rest.
+#
+# Applied in two places, so ordering against the IGDB catalog sync never matters:
+#   PlatformCuration      - consulted when GameCacheService first creates a platform row
+#   PlatformCurationReconciler - reconciles every existing row at application startup
+# Workflow: edit this file, restart game-service, done.
+
+sony:
+  - { name: "PlayStation 5", order: 10 }
+  - { name: "PlayStation 4", order: 20 }
+  - { name: "PlayStation 3", order: 30 }
+  - { name: "PlayStation 2", order: 40 }
+  - { name: "PlayStation", order: 50 }
+  - { name: "PlayStation Portable", order: 60 }
+  - { name: "PlayStation Vita", order: 70 }
+  - { name: "PlayStation VR2", order: 80 }
+  - { name: "PlayStation VR", order: 90 }
+
+microsoft:
+  - { name: "Xbox Series X|S", order: 10 }
+  - { name: "Xbox One", order: 20 }
+  - { name: "Xbox 360", order: 30 }
+  - { name: "Xbox", order: 40 }
+
+nintendo:
+  - { name: "Nintendo Switch 2", order: 5 }
+  - { name: "Nintendo Switch", order: 10 }
+  - { name: "Wii U", order: 20 }
+  - { name: "Wii", order: 30 }
+  - { name: "Nintendo GameCube", order: 40 }
+  - { name: "Nintendo 64", order: 50 }
+  - { name: "Super Nintendo Entertainment System", order: 60 }
+  - { name: "Nintendo Entertainment System", order: 70 }
+  - { name: "Nintendo 3DS", order: 80 }
+  - { name: "Nintendo DSi", order: 85 }
+  - { name: "Nintendo DS", order: 90 }
+  - { name: "Game Boy Advance", order: 100 }
+  - { name: "Game Boy Color", order: 110 }
+  - { name: "Game Boy", order: 120 }
+  - { name: "Virtual Boy", order: 130 }
+
+pc:
+  - { name: "PC", order: 10 }
+  - { name: "Mac", order: 20 }
+  - { name: "Linux", order: 30 }
+  - { name: "DOS", order: 40 }
+
+mobile:
+  - { name: "iOS", order: 10 }
+  - { name: "Android", order: 20 }
+
+other:
+  - { name: "Dreamcast", order: 10 }
+  - { name: "Sega Saturn", order: 20 }
+  - { name: "Sega Mega Drive/Genesis", order: 30 }
+  - { name: "Sega CD", order: 40 }
+  - { name: "Sega 32X", order: 50 }
+  - { name: "Sega Master System/Mark III", order: 60 }
+  - { name: "Sega Game Gear", order: 70 }
+  - { name: "Atari 2600", order: 100 }
+  - { name: "Atari 5200", order: 110 }
+  - { name: "Atari 7800", order: 120 }
+  - { name: "Atari Lynx", order: 130 }
+  - { name: "Atari Jaguar", order: 140 }
+  - { name: "Atari ST/STE", order: 150 }
+  - { name: "Atari 8-bit", order: 160 }
+  - { name: "Commodore C64/128/MAX", order: 200 }
+  - { name: "Amiga", order: 210 }
+  - { name: "Amiga CD32", order: 220 }
+  - { name: "Commodore VIC-20", order: 230 }
+  - { name: "ZX Spectrum", order: 300 }
+  - { name: "Amstrad CPC", order: 310 }
+  - { name: "Apple II", order: 320 }
+  - { name: "MSX", order: 330 }
+  - { name: "MSX2", order: 340 }
+  - { name: "Neo Geo AES", order: 400 }
+  - { name: "Neo Geo CD", order: 410 }
+  - { name: "Neo Geo Pocket Color", order: 420 }
+  - { name: "Neo Geo Pocket", order: 430 }
+  - { name: "TurboGrafx-16/PC Engine", order: 500 }
+  - { name: "Turbografx-16/PC Engine CD", order: 510 }
+  - { name: "3DO Interactive Multiplayer", order: 600 }
+  - { name: "ColecoVision", order: 610 }
+  - { name: "Intellivision", order: 620 }
+  - { name: "Vectrex", order: 630 }
+  - { name: "WonderSwan Color", order: 640 }
+  - { name: "WonderSwan", order: 650 }
+  - { name: "Playdate", order: 660 }
+  - { name: "Google Stadia", order: 670 }
+  - { name: "Ouya", order: 680 }
+  - { name: "Arcade", order: 800 }
+  - { name: "Web browser", order: 850 }
+  - { name: "Meta Quest 3", order: 900 }
+  - { name: "Meta Quest 2", order: 910 }
+  - { name: "Oculus Rift", order: 920 }
+  - { name: "Oculus Quest", order: 930 }
+  - { name: "Oculus VR", order: 940 }
