@@ -121,7 +121,6 @@ Used by the recommendation-service per-user worker. Protected by `InternalAuthFi
 | `IGDB_WORKER_ENABLED`                 | `true`                             | Master switch for the nightly worker             |
 | `IGDB_WORKER_DISCOVERY_PAGES`         | `50`                               | Pages per nightly run (50 x 500 = 25k)           |
 | `IGDB_WORKER_DISCOVERY_LIMIT`         | `500`                              | Games per page (IGDB max)                        |
-| `IGDB_WORKER_ENRICHMENT_LIMIT`        | `400`                              | Stubs to enrich per run                          |
 | `IGDB_WORKER_CRON`                    | `0 30 3 * * *`                     | Cron expression (default 03:30 daily)            |
 | `IGDB_WORKER_RATE_LIMIT_DELAY_MS`     | `250`                              | Delay between IGDB calls inside the worker       |
 | `INTERNAL_SERVICE_TOKEN`              | (required for /internal/** auth)   | Shared secret accepted by `InternalAuthFilter` on `/internal/**`. Fail-closed when unset. |
