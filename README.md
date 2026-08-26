@@ -38,6 +38,7 @@ Game Service is read-mostly: the frontend and the other backend services pull ca
 - Spring Security OAuth 2 Resource Server for JWT validation
 - IGDB v4 via Twitch OAuth (`Client-ID` + bearer)
 - `@Scheduled` cron worker for nightly catalog walks
+- Sentry for error tracking (`sentry-spring-boot-4` + `sentry-logback`)
 
 ## Caching Strategy
 
@@ -124,6 +125,9 @@ Used by the recommendation-service per-user worker. Protected by `InternalAuthFi
 | `IGDB_WORKER_CRON`                    | `0 30 3 * * *`                     | Cron expression (default 03:30 daily)            |
 | `IGDB_WORKER_RATE_LIMIT_DELAY_MS`     | `250`                              | Delay between IGDB calls inside the worker       |
 | `INTERNAL_SERVICE_TOKEN`              | (required for /internal/** auth)   | Shared secret accepted by `InternalAuthFilter` on `/internal/**`. Fail-closed when unset. |
+| `SENTRY_DSN`                          | (empty)                            | Sentry ingest endpoint. Empty makes the SDK a no-op, so local runs and tests send nothing. Set in production only. |
+| `SENTRY_ENVIRONMENT`                  | `local`                            | Environment tag on every Sentry event            |
+| `SENTRY_RELEASE`                      | (empty)                            | Commit sha, baked into the image at build time so Sentry can group regressions by deploy |
 
 Register an application at [dev.twitch.tv/console](https://dev.twitch.tv/console) to obtain `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET`. IGDB inherits Twitch OAuth.
 
