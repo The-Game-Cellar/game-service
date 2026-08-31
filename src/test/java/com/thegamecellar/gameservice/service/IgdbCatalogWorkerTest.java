@@ -38,6 +38,7 @@ class IgdbCatalogWorkerTest {
         ReflectionTestUtils.setField(worker, "newReleasesPages", 2);
         ReflectionTestUtils.setField(worker, "upcomingPages", 2);
         ReflectionTestUtils.setField(worker, "rateLimitDelayMs", 0L);
+        ReflectionTestUtils.setField(worker, "retryDelayMs", 0L);
         lenient().when(gameService.syncIgdbUpcomingOffset(anyInt(), anyInt()))
                 .thenReturn(CatalogSyncResult.empty());
         lenient().when(gameService.findUpcomingIgdbIds()).thenReturn(java.util.List.of());
@@ -174,5 +175,54 @@ class IgdbCatalogWorkerTest {
         worker.syncCatalog();
 
         verify(gameService, atLeastOnce()).syncIgdbNewReleasesOffset(anyInt(), anyInt());
+    }
+
+    @Test
+    void shouldRetryFailedDiscoveryPageOnceAndKeepItsGames() {
+        when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY)).thenReturn(Optional.empty());
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(new CatalogSyncResult(500, 5));
+        when(gameService.syncIgdbCatalogOffset(500, 500))
+                .thenThrow(new RuntimeException("Read timed out"))
+                .thenReturn(new CatalogSyncResult(500, 5));
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(CatalogSyncResult.empty());
+
+        worker.syncCatalog();
+
+        verify(gameService, times(2)).syncIgdbCatalogOffset(500, 500);
+        verify(gameService, times(4)).syncIgdbCatalogOffset(anyInt(), anyInt());
+        ArgumentCaptor<SyncState> captor = ArgumentCaptor.forClass(SyncState.class);
+        verify(syncStateRepository).save(captor.capture());
+        assertThat(captor.getValue().getStateValue()).isEqualTo("1500");
+    }
+
+    @Test
+    void shouldSkipPageAfterSecondFailureAndContinueTheWalk() {
+        when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY)).thenReturn(Optional.empty());
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(new CatalogSyncResult(500, 5));
+        when(gameService.syncIgdbCatalogOffset(500, 500)).thenThrow(new RuntimeException("Read timed out"));
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(CatalogSyncResult.empty());
+
+        worker.syncCatalog();
+
+        verify(gameService, times(2)).syncIgdbCatalogOffset(500, 500);
+        verify(gameService).syncIgdbCatalogOffset(1000, 500);
+        ArgumentCaptor<SyncState> captor = ArgumentCaptor.forClass(SyncState.class);
+        verify(syncStateRepository).save(captor.capture());
+        assertThat(captor.getValue().getStateValue()).isEqualTo("1500");
+    }
+
+    @Test
+    void shouldRetryFailedNewReleasesPageOnce() {
+        when(syncStateRepository.findById(IGDB_DISCOVERY_OFFSET_KEY)).thenReturn(Optional.empty());
+        when(gameService.syncIgdbCatalogOffset(anyInt(), anyInt())).thenReturn(CatalogSyncResult.empty());
+        when(gameService.syncIgdbNewReleasesOffset(anyInt(), anyInt())).thenReturn(CatalogSyncResult.empty());
+        when(gameService.syncIgdbNewReleasesOffset(0, 500))
+                .thenThrow(new RuntimeException("Read timed out"))
+                .thenReturn(new CatalogSyncResult(500, 2));
+
+        worker.syncCatalog();
+
+        verify(gameService, times(2)).syncIgdbNewReleasesOffset(0, 500);
+        verify(gameService).syncIgdbNewReleasesOffset(500, 500);
     }
 }

@@ -42,13 +42,17 @@ public class IgdbApiClient {
             "multiplayer_modes.campaigncoop,multiplayer_modes.dropin;";
 
     private final RestTemplate restTemplate;
+    // Longer read timeout for the worker's bulk pages; nothing on a user request goes through it
+    private final RestTemplate workerRestTemplate;
     private final IgdbTokenService tokenService;
     private final String baseUrl;
 
     public IgdbApiClient(@Qualifier("igdbRestTemplate") RestTemplate restTemplate,
+                         @Qualifier("igdbWorkerRestTemplate") RestTemplate workerRestTemplate,
                          IgdbTokenService tokenService,
                          @Value("${igdb.api.base-url}") String baseUrl) {
         this.restTemplate = restTemplate;
+        this.workerRestTemplate = workerRestTemplate;
         this.tokenService = tokenService;
         this.baseUrl = baseUrl;
     }
@@ -65,7 +69,7 @@ public class IgdbApiClient {
         if (igdbIds == null || igdbIds.isEmpty()) return List.of();
         String idList = igdbIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
         String query = FIELDS_GAME + " where id = (" + idList + "); limit " + igdbIds.size() + ";";
-        return queryGames(query);
+        return queryGames(query, workerRestTemplate);
     }
 
     public List<IgdbGameDto> fetchNewReleases(int limit, int offset) {
@@ -74,7 +78,7 @@ public class IgdbApiClient {
                 " where first_release_date != null & first_release_date < " + now + ";" +
                 " sort first_release_date desc;" +
                 " limit " + limit + "; offset " + offset + ";";
-        return queryGames(query);
+        return queryGames(query, workerRestTemplate);
     }
 
     public List<IgdbGameDto> fetchUpcomingReleases(int limit, int offset) {
@@ -83,7 +87,7 @@ public class IgdbApiClient {
                 " where first_release_date != null & first_release_date > " + now + ";" +
                 " sort first_release_date asc;" +
                 " limit " + limit + "; offset " + offset + ";";
-        return queryGames(query);
+        return queryGames(query, workerRestTemplate);
     }
 
     public List<IgdbGameDto> searchGames(String searchQuery, int limit, int offset) {
@@ -122,11 +126,19 @@ public class IgdbApiClient {
         return queryGames(query.toString());
     }
 
+    // Same page as fetchCatalogPageForSync, on the request-path timeout: this one serves the Explore browse fallback
     public List<IgdbGameDto> fetchCatalogPage(int limit, int offset) {
-        String query = FIELDS_GAME +
+        return queryGames(catalogPageQuery(limit, offset), restTemplate);
+    }
+
+    public List<IgdbGameDto> fetchCatalogPageForSync(int limit, int offset) {
+        return queryGames(catalogPageQuery(limit, offset), workerRestTemplate);
+    }
+
+    private static String catalogPageQuery(int limit, int offset) {
+        return FIELDS_GAME +
                 " sort aggregated_rating_count desc;" +
                 " limit " + limit + "; offset " + offset + ";";
-        return queryGames(query);
     }
 
     public List<IgdbNamedEntityDto> fetchGenres() {
@@ -138,9 +150,13 @@ public class IgdbApiClient {
     }
 
     private List<IgdbGameDto> queryGames(String apicalypse) {
+        return queryGames(apicalypse, restTemplate);
+    }
+
+    private List<IgdbGameDto> queryGames(String apicalypse, RestTemplate template) {
         String url = endpoint("/games");
         try {
-            IgdbGameDto[] response = restTemplate.postForObject(url, request(apicalypse), IgdbGameDto[].class);
+            IgdbGameDto[] response = template.postForObject(url, request(apicalypse), IgdbGameDto[].class);
             return response != null ? Arrays.asList(response) : List.of();
         } catch (Exception e) {
             throw new IgdbApiException("IGDB /games query failed: " + e.getMessage(), e);

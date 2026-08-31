@@ -119,11 +119,14 @@ Used by the recommendation-service per-user worker. Protected by `InternalAuthFi
 | `TWITCH_CLIENT_ID`                    | _none_                             | Twitch app client ID (IGDB inherits Twitch OAuth)|
 | `TWITCH_CLIENT_SECRET`                | _none_                             | Twitch app secret                                |
 | `IGDB_API_BASE_URL`                   | `https://api.igdb.com/v4`          | Override only for testing against a mock         |
+| `IGDB_CONNECT_TIMEOUT` / `IGDB_READ_TIMEOUT` | `2000` / `10000`            | IGDB client timeouts (ms) on the request path: search, detail, browse fallback |
 | `IGDB_WORKER_ENABLED`                 | `true`                             | Master switch for the nightly worker             |
 | `IGDB_WORKER_DISCOVERY_PAGES`         | `50`                               | Pages per nightly run (50 x 500 = 25k)           |
 | `IGDB_WORKER_DISCOVERY_LIMIT`         | `500`                              | Games per page (IGDB max)                        |
 | `IGDB_WORKER_CRON`                    | `0 30 3 * * *`                     | Cron expression (default 03:30 daily)            |
 | `IGDB_WORKER_RATE_LIMIT_DELAY_MS`     | `250`                              | Delay between IGDB calls inside the worker       |
+| `IGDB_WORKER_READ_TIMEOUT`            | `30000`                            | Read timeout (ms) for the worker's bulk pages (catalog walk, new and upcoming releases, id batches); deep-offset pages run close to 10 s at IGDB |
+| `IGDB_WORKER_RETRY_DELAY_MS`          | `2000`                             | Wait before the single retry of a failed worker page; a page fails for good only when the retry fails too |
 | `INTERNAL_SERVICE_TOKEN`              | (required for /internal/** auth)   | Shared secret accepted by `InternalAuthFilter` on `/internal/**`. Fail-closed when unset. |
 | `SENTRY_DSN`                          | (empty)                            | Sentry ingest endpoint. Empty makes the SDK a no-op, so local runs and tests send nothing. Set in production only. |
 | `SENTRY_ENVIRONMENT`                  | `local`                            | Environment tag on every Sentry event            |

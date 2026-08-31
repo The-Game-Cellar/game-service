@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.function.Supplier;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -36,6 +38,9 @@ public class IgdbCatalogWorker {
 
     @Value("${igdb.worker.rate-limit-delay-ms:250}")
     private long rateLimitDelayMs;
+
+    @Value("${igdb.worker.retry-delay-ms:2000}")
+    private long retryDelayMs;
 
     public void quickSync() {
         log.info("IGDB quick sync started");
@@ -76,7 +81,9 @@ public class IgdbCatalogWorker {
 
         for (int i = 0; i < discoveryPages; i++, offset += discoveryLimit) {
             try {
-                CatalogSyncResult result = gameService.syncIgdbCatalogOffset(offset, discoveryLimit);
+                int pageOffset = offset;
+                CatalogSyncResult result = withRetry("Main discovery", pageOffset,
+                        () -> gameService.syncIgdbCatalogOffset(pageOffset, discoveryLimit));
                 newGamesTotal += result.cached();
                 if (result.fetched() == 0) {
                     if (++consecutiveEmpty >= EARLY_EXIT_THRESHOLD) {
@@ -103,7 +110,9 @@ public class IgdbCatalogWorker {
         int offset = 0;
         for (int i = 0; i < newReleasesPages; i++, offset += discoveryLimit) {
             try {
-                CatalogSyncResult result = gameService.syncIgdbNewReleasesOffset(offset, discoveryLimit);
+                int pageOffset = offset;
+                CatalogSyncResult result = withRetry("New releases discovery", pageOffset,
+                        () -> gameService.syncIgdbNewReleasesOffset(pageOffset, discoveryLimit));
                 newGames += result.cached();
                 rateLimitSleep();
             } catch (Exception e) {
@@ -118,7 +127,9 @@ public class IgdbCatalogWorker {
         int offset = 0;
         for (int i = 0; i < upcomingPages; i++, offset += discoveryLimit) {
             try {
-                CatalogSyncResult result = gameService.syncIgdbUpcomingOffset(offset, discoveryLimit);
+                int pageOffset = offset;
+                CatalogSyncResult result = withRetry("Upcoming releases discovery", pageOffset,
+                        () -> gameService.syncIgdbUpcomingOffset(pageOffset, discoveryLimit));
                 newGames += result.cached();
                 if (result.fetched() == 0) break;
                 rateLimitSleep();
@@ -144,9 +155,25 @@ public class IgdbCatalogWorker {
         log.info("Upcoming refresh complete: {}/{} rows updated", refreshed, upcomingIds.size());
     }
 
-    private void rateLimitSleep() {
+    // One retry per page: a single slow IGDB response must not cost the page, and the error-level log
+    // that reaches Sentry should mean IGDB failed twice in a row
+    private CatalogSyncResult withRetry(String phase, int offset, Supplier<CatalogSyncResult> page) {
         try {
-            Thread.sleep(rateLimitDelayMs);
+            return page.get();
+        } catch (Exception first) {
+            log.warn("{} page at offset {} failed, retrying once: {}", phase, offset, first.getMessage());
+            sleep(retryDelayMs);
+            return page.get();
+        }
+    }
+
+    private void rateLimitSleep() {
+        sleep(rateLimitDelayMs);
+    }
+
+    private static void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

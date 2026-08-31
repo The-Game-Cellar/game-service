@@ -33,6 +33,9 @@ class IgdbApiClientTest {
     private RestTemplate restTemplate;
 
     @Mock
+    private RestTemplate workerRestTemplate;
+
+    @Mock
     private IgdbTokenService tokenService;
 
     private IgdbApiClient client;
@@ -41,7 +44,7 @@ class IgdbApiClientTest {
     void setUp() {
         when(tokenService.getToken()).thenReturn("test-token");
         when(tokenService.getClientId()).thenReturn("test-client-id");
-        client = new IgdbApiClient(restTemplate, tokenService, "https://api.igdb.com/v4");
+        client = new IgdbApiClient(restTemplate, workerRestTemplate, tokenService, "https://api.igdb.com/v4");
     }
 
     @Test
@@ -123,11 +126,39 @@ class IgdbApiClientTest {
         ArgumentCaptor<HttpEntity<String>> captor = ArgumentCaptor.forClass(HttpEntity.class);
         verify(restTemplate).postForObject(anyString(), captor.capture(), eq(IgdbGameDto[].class));
         assertThat(captor.getValue().getBody()).contains("limit 500").contains("offset 1000");
+        verifyNoInteractions(workerRestTemplate);
+    }
+
+    @Test
+    void fetchCatalogPageForSync_usesWorkerTemplate_withSameQuery() {
+        when(workerRestTemplate.postForObject(anyString(), any(), eq(IgdbGameDto[].class)))
+                .thenReturn(new IgdbGameDto[]{});
+
+        client.fetchCatalogPageForSync(500, 302500);
+
+        ArgumentCaptor<HttpEntity<String>> captor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(workerRestTemplate).postForObject(anyString(), captor.capture(), eq(IgdbGameDto[].class));
+        assertThat(captor.getValue().getBody())
+                .contains("sort aggregated_rating_count desc").contains("limit 500").contains("offset 302500");
+        verifyNoInteractions(restTemplate);
+    }
+
+    @Test
+    void releaseWalks_useWorkerTemplate() {
+        when(workerRestTemplate.postForObject(anyString(), any(), eq(IgdbGameDto[].class)))
+                .thenReturn(new IgdbGameDto[]{});
+
+        client.fetchNewReleases(500, 0);
+        client.fetchUpcomingReleases(500, 0);
+        client.fetchGamesByIds(List.of(1, 2, 3));
+
+        verify(workerRestTemplate, times(3)).postForObject(anyString(), any(), eq(IgdbGameDto[].class));
+        verifyNoInteractions(restTemplate);
     }
 
     @Test
     void hostAllowlist_throwsIgdbApiException_forNonIgdbHost() {
-        IgdbApiClient maliciousClient = new IgdbApiClient(restTemplate, tokenService, "https://evil.com/v4");
+        IgdbApiClient maliciousClient = new IgdbApiClient(restTemplate, workerRestTemplate, tokenService, "https://evil.com/v4");
 
         assertThatThrownBy(() -> maliciousClient.fetchGameById(1))
                 .isInstanceOf(IgdbApiException.class)
