@@ -1,6 +1,7 @@
 package com.thegamecellar.gameservice.controller;
 
 import com.thegamecellar.gameservice.service.AdminSyncExecutor;
+import com.thegamecellar.gameservice.service.BackgroundArtWorker;
 import com.thegamecellar.gameservice.service.DerivedGenreBackfillService;
 import com.thegamecellar.gameservice.service.GameService;
 import com.thegamecellar.gameservice.service.IgdbCatalogWorker;
@@ -23,6 +24,7 @@ import java.util.Map;
 public class AdminController {
 
     private final IgdbCatalogWorker igdbCatalogWorker;
+    private final BackgroundArtWorker backgroundArtWorker;
     private final AdminSyncExecutor adminSyncExecutor;
     private final GameService gameService;
     private final TagPruneService tagPruneService;
@@ -44,6 +46,14 @@ public class AdminController {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("Sync already in progress");
         }
         return ResponseEntity.accepted().body("Quick sync started, fetching ~100 games");
+    }
+
+    @PostMapping("/background-art")
+    public ResponseEntity<String> triggerBackgroundArtPass() {
+        if (!adminSyncExecutor.trySubmit("background-art", backgroundArtWorker::runPass)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("Sync already in progress");
+        }
+        return ResponseEntity.accepted().body("Background art pass started");
     }
 
     @PostMapping("/backfill-developers")

@@ -22,6 +22,10 @@ public class GameResponse {
 
     private String backgroundImage;
     private String coverImageUrl;
+    // Chosen full-bleed background: t_1080p CDN URL, null while undecided or when nothing passed.
+    private String backgroundArtUrl;
+    // 'artwork' or 'screenshot' for a chosen background, null otherwise.
+    private String backgroundSource;
     private String released;
     // IGDB first_release_date as Unix epoch seconds (canonical worldwide release).
     private Long firstReleaseDate;

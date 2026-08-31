@@ -79,6 +79,37 @@ class GameMapperTest {
     }
 
     @Test
+    void shouldMapDecidedBackgroundArtToUrlAndHideTheNoneMarker() {
+        Game decided = Game.builder()
+                .igdbId(1)
+                .name("Decided")
+                .backgroundImageId("ar17uv")
+                .backgroundSource("artwork")
+                .genres(new HashSet<>())
+                .platforms(new HashSet<>())
+                .tags(new HashSet<>())
+                .themes(new HashSet<>())
+                .build();
+        Game failed = Game.builder()
+                .igdbId(2)
+                .name("Failed")
+                .backgroundSource("none")
+                .genres(new HashSet<>())
+                .platforms(new HashSet<>())
+                .tags(new HashSet<>())
+                .themes(new HashSet<>())
+                .build();
+
+        GameResponse decidedResponse = GameMapper.toResponse(decided);
+        GameResponse failedResponse = GameMapper.toResponse(failed);
+
+        assertThat(decidedResponse.getBackgroundArtUrl()).contains("t_1080p").contains("ar17uv");
+        assertThat(decidedResponse.getBackgroundSource()).isEqualTo("artwork");
+        assertThat(failedResponse.getBackgroundArtUrl()).isNull();
+        assertThat(failedResponse.getBackgroundSource()).isNull();
+    }
+
+    @Test
     void shouldReturnEmptyDevelopersListWhenDevelopersIsNull() {
         Game game = Game.builder()
                 .igdbId(1)

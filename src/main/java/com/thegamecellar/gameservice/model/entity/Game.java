@@ -87,6 +87,19 @@ public class Game {
     @Column(name = "screenshots", columnDefinition = "TEXT")
     private String screenshots;
 
+    // Raw background candidates from the sync: JSON [{id, w, h, s}], s = a(rtwork) or s(creenshot).
+    // '[]' = harvested with nothing to offer; NULL = the sync has not visited the row yet.
+    @Column(name = "background_art_pool", columnDefinition = "TEXT")
+    private String backgroundArtPool;
+
+    // Background art worker's decision; built into a t_1080p URL in the response.
+    @Column(name = "background_image_id", length = 255)
+    private String backgroundImageId;
+
+    // 'artwork' or 'screenshot' on a winner, 'none' when every candidate failed, NULL while undecided.
+    @Column(name = "background_source", length = 16)
+    private String backgroundSource;
+
     // JSON array of YouTube video_id strings.
     @Column(name = "videos", columnDefinition = "TEXT")
     private String videos;

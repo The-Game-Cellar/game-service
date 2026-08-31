@@ -1,5 +1,8 @@
 package com.thegamecellar.gameservice.service;
 
+import com.thegamecellar.gameservice.model.dto.igdb.IgdbArtworkDto;
+import com.thegamecellar.gameservice.model.dto.igdb.IgdbGameDto;
+import com.thegamecellar.gameservice.model.dto.igdb.IgdbScreenshotDto;
 import com.thegamecellar.gameservice.model.entity.Game;
 import com.thegamecellar.gameservice.model.entity.Genre;
 import com.thegamecellar.gameservice.model.entity.Tag;
@@ -11,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -159,6 +163,55 @@ class GameCacheServiceTest {
 
         verify(genreRepository, times(2)).save(any(Genre.class));
         assertThat(game.getGenres()).extracting(Genre::getName).containsExactlyInAnyOrder("Action", "Fantasy");
+    }
+
+    // ── background art pool ───────────────────────────────────────────────────
+
+    @Test
+    void refreshUpcomingGame_stores_background_art_pool_while_undecided() {
+        Game game = newGame();
+        IgdbGameDto dto = new IgdbGameDto();
+        IgdbArtworkDto art = new IgdbArtworkDto();
+        art.setImageId("ar17uv");
+        art.setWidth(1920);
+        art.setHeight(1080);
+        dto.setArtworks(List.of(art));
+        IgdbScreenshotDto shot = new IgdbScreenshotDto();
+        shot.setImageId("sc8lik");
+        shot.setWidth(1280);
+        shot.setHeight(720);
+        IgdbScreenshotDto withoutDims = new IgdbScreenshotDto();
+        withoutDims.setImageId("scnodims");
+        dto.setScreenshots(List.of(shot, withoutDims));
+
+        service.refreshUpcomingGame(game, dto);
+
+        assertThat(game.getBackgroundArtPool())
+                .contains("\"id\":\"ar17uv\"").contains("\"s\":\"a\"")
+                .contains("\"id\":\"sc8lik\"").contains("\"s\":\"s\"")
+                .doesNotContain("scnodims");
+    }
+
+    @Test
+    void refreshUpcomingGame_keeps_pool_untouched_once_decided() {
+        Game game = newGame();
+        game.setBackgroundSource("artwork");
+        game.setBackgroundArtPool("[{\"id\":\"old\",\"w\":1,\"h\":1,\"s\":\"a\"}]");
+        IgdbGameDto dto = new IgdbGameDto();
+
+        service.refreshUpcomingGame(game, dto);
+
+        assertThat(game.getBackgroundArtPool()).contains("old");
+    }
+
+    @Test
+    void refreshUpcomingGame_stores_empty_pool_when_igdb_has_no_candidates() {
+        Game game = newGame();
+        IgdbGameDto dto = new IgdbGameDto();
+
+        service.refreshUpcomingGame(game, dto);
+
+        assertThat(game.getBackgroundArtPool()).isEqualTo("[]");
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

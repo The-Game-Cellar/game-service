@@ -45,7 +45,7 @@ Game Service is read-mostly: the frontend and the other backend services pull ca
 Two ingestion paths share the local cache:
 
 - **User-triggered (`getGameById`)**: narrow stale check. Returns immediately if the cached row has core data; refetches from IGDB only when `tags`, `genres`, `description`, or `developers` are missing. Each refresh costs an IGDB round trip, so the bar is high.
-- **Worker / search-side (`cacheIfAbsent`)**: wider stale check. Refreshes when any of `tags`, `genres`, `description`, `developers`, `category`, `rating_count`, `screenshots`, `videos`, `dlc_ids`, `expansion_ids`, `similar_game_ids`, `age_ratings`, `release_dates`, `multiplayer_modes` is missing. The DTO is already in hand, so the marginal cost is zero.
+- **Worker / search-side (`cacheIfAbsent`)**: wider stale check. Refreshes when any of `tags`, `genres`, `description`, `developers`, `category`, `rating_count`, `screenshots`, `videos`, `dlc_ids`, `expansion_ids`, `similar_game_ids`, `age_ratings`, `release_dates`, `multiplayer_modes`, `background_art_pool` is missing. The DTO is already in hand, so the marginal cost is zero.
 
 Genre-only searches use a three-step fallback: genre cache hit, broad pool fallback (recent cached games re-ranked by similarity), then IGDB.
 
@@ -63,7 +63,9 @@ player_perspectives             sync_state
 
 Plus the join tables: `game_genres`, `game_tags`, `game_themes`, `game_platforms`, `game_modes_link`, `game_franchises`, `game_collections`, `game_player_perspectives`.
 
-A small set of columns are stored as JSON-as-`TEXT` (`screenshots`, `videos`, `dlc_ids`, `expansion_ids`, `similar_game_ids`, `age_ratings`, `release_dates`, `multiplayer_modes`) since nothing queries into them; they round-trip through the mapper.
+A small set of columns are stored as JSON-as-`TEXT` (`screenshots`, `videos`, `dlc_ids`, `expansion_ids`, `similar_game_ids`, `age_ratings`, `release_dates`, `multiplayer_modes`, `background_art_pool`) since nothing queries into them; they round-trip through the mapper.
+
+`games` also carries a decided background image for full-bleed surfaces. The catalog sync stores raw artwork/screenshot candidates (id + dimensions) in `background_art_pool`; a nightly background art worker then downloads up to three candidates per game, quality-checks them (file size, grey entropy, colour count) and stores the winner as `background_image_id` + `background_source` (`artwork`/`screenshot`, or `none` when every candidate failed). Served as `backgroundArtUrl` (a `t_1080p` CDN URL) and `backgroundSource` on `GameResponse`.
 
 `platforms` carries three curation columns (`is_preference_eligible BOOLEAN`, `category VARCHAR(20)`, `display_order INT`) used by `/api/v1/platforms/catalog` to drive the Preferences picker. Curation is declared in `src/main/resources/platform-curation.yaml` and is authoritative in both directions: a platform listed there is flagged eligible with its category and order, one absent from it is reset to the column defaults. Platform rows are created by the IGDB catalog sync at runtime, not by a migration, so the file is applied twice: `GameCacheService` curates a row as it inserts it, and `PlatformCurationReconciler` reconciles every existing row at startup. Edit the file and restart the service.
 
@@ -94,6 +96,7 @@ A small set of columns are stored as JSON-as-`TEXT` (`screenshots`, `videos`, `d
 | POST   | `/api/v1/admin/sync`                          | Full IGDB catalog walk (~100k games). Overlap-protected.          |
 | POST   | `/api/v1/admin/sync/quick`                    | ~100-game quick sync.                                             |
 | POST   | `/api/v1/admin/backfill-developers`           | One-shot loop over rows with `developers IS NULL`.                |
+| POST   | `/api/v1/admin/background-art`                | Background art pass over rows with an undecided pool. Overlap-protected. |
 | GET    | `/api/v1/admin/sync/status`                   | `{ running: bool }`.                                              |
 
 ### Internal service-to-service (no user JWT)
@@ -127,6 +130,10 @@ Used by the recommendation-service per-user worker. Protected by `InternalAuthFi
 | `IGDB_WORKER_RATE_LIMIT_DELAY_MS`     | `250`                              | Delay between IGDB calls inside the worker       |
 | `IGDB_WORKER_READ_TIMEOUT`            | `30000`                            | Read timeout (ms) for the worker's bulk pages (catalog walk, new and upcoming releases, id batches); deep-offset pages run close to 10 s at IGDB |
 | `IGDB_WORKER_RETRY_DELAY_MS`          | `2000`                             | Wait before the single retry of a failed worker page; a page fails for good only when the retry fails too |
+| `IGDB_BACKGROUND_ART_ENABLED`         | `true`                             | Master switch for the nightly background art worker |
+| `IGDB_BACKGROUND_ART_CRON`            | `0 30 4 * * *`                     | Art worker cron, one hour after the catalog worker so the night's harvested pools are in hand |
+| `IGDB_BACKGROUND_ART_BATCH_SIZE`      | `5000`                             | Games decided per art pass; raise temporarily for catch-up |
+| `IGDB_BACKGROUND_ART_DOWNLOAD_DELAY_MS` | `200`                            | Politeness delay between games; each game downloads at most three candidate images |
 | `INTERNAL_SERVICE_TOKEN`              | (required for /internal/** auth)   | Shared secret accepted by `InternalAuthFilter` on `/internal/**`. Fail-closed when unset. |
 | `SENTRY_DSN`                          | (empty)                            | Sentry ingest endpoint. Empty makes the SDK a no-op, so local runs and tests send nothing. Set in production only. |
 | `SENTRY_ENVIRONMENT`                  | `local`                            | Environment tag on every Sentry event            |

@@ -56,6 +56,7 @@ public class IgdbGameDto {
     private List<IgdbInvolvedCompanyDto> involvedCompanies;
 
     private List<IgdbScreenshotDto> screenshots;
+    private List<IgdbArtworkDto> artworks;
     private List<IgdbVideoDto> videos;
 
     private List<Integer> dlcs;

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 @Data
-public class IgdbScreenshotDto {
+public class IgdbArtworkDto {
     private Integer id;
 
     @JsonProperty("image_id")
