@@ -3,6 +3,7 @@ package com.thegamecellar.gameservice.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thegamecellar.gameservice.model.dto.igdb.IgdbAgeRatingDto;
+import com.thegamecellar.gameservice.model.dto.igdb.IgdbArtworkDto;
 import com.thegamecellar.gameservice.model.dto.igdb.IgdbGameDto;
 import com.thegamecellar.gameservice.model.dto.igdb.IgdbMultiplayerModeDto;
 import com.thegamecellar.gameservice.model.dto.igdb.IgdbReleaseDateDto;
@@ -147,6 +148,7 @@ public class GameCacheService {
             game.setHypes(dto.getHypes());
         }
         if (game.getScreenshots() == null) game.setScreenshots(serializeScreenshots(dto));
+        if (game.getBackgroundArtPool() == null) game.setBackgroundArtPool(serializeBackgroundArtPool(dto));
         if (game.getVideos() == null) game.setVideos(serializeVideos(dto));
         if (game.getDlcIds() == null) game.setDlcIds(serializeIntList(dto.getDlcs()));
         if (game.getExpansionIds() == null) game.setExpansionIds(serializeIntList(dto.getExpansions()));
@@ -174,6 +176,10 @@ public class GameCacheService {
             game.setTotalRating(GameMapper.normalizeRating(dto.getTotalRating()));
             game.setTotalRatingCount(dto.getTotalRatingCount());
         }
+        // Upcoming titles gain art over time; rewrite the pool until the art worker has decided.
+        if (game.getBackgroundSource() == null) {
+            game.setBackgroundArtPool(serializeBackgroundArtPool(dto));
+        }
         return gameRepository.save(game);
     }
 
@@ -186,6 +192,7 @@ public class GameCacheService {
                 || game.getCategory() == null
                 || game.getRatingCount() == null
                 || game.getScreenshots() == null
+                || game.getBackgroundArtPool() == null
                 || game.getVideos() == null
                 || game.getDlcIds() == null
                 || game.getExpansionIds() == null
@@ -225,6 +232,7 @@ public class GameCacheService {
 
     private void applyOwnedJsonFields(Game game, IgdbGameDto dto) {
         game.setScreenshots(serializeScreenshots(dto));
+        game.setBackgroundArtPool(serializeBackgroundArtPool(dto));
         game.setVideos(serializeVideos(dto));
         game.setDlcIds(serializeIntList(dto.getDlcs()));
         game.setExpansionIds(serializeIntList(dto.getExpansions()));
@@ -344,6 +352,33 @@ public class GameCacheService {
                 .filter(s -> s != null && !s.isBlank())
                 .toList();
         return writeJson(ids);
+    }
+
+    private String serializeBackgroundArtPool(IgdbGameDto dto) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        if (dto.getArtworks() != null) {
+            for (IgdbArtworkDto a : dto.getArtworks()) {
+                addArtPoolRow(rows, a.getImageId(), a.getWidth(), a.getHeight(), "a");
+            }
+        }
+        if (dto.getScreenshots() != null) {
+            for (IgdbScreenshotDto s : dto.getScreenshots()) {
+                addArtPoolRow(rows, s.getImageId(), s.getWidth(), s.getHeight(), "s");
+            }
+        }
+        return writeJson(rows);
+    }
+
+    private static void addArtPoolRow(List<Map<String, Object>> rows,
+                                      String imageId, Integer width, Integer height, String source) {
+        // Dimensions are required: the art worker's shape rules cannot judge a candidate without them.
+        if (imageId == null || imageId.isBlank() || width == null || height == null) return;
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", imageId);
+        row.put("w", width);
+        row.put("h", height);
+        row.put("s", source);
+        rows.add(row);
     }
 
     private String serializeVideos(IgdbGameDto dto) {

@@ -69,3 +69,11 @@ igdb:
     read-timeout: ${IGDB_WORKER_READ_TIMEOUT:30000}
     # Wait before the single retry of a failed page.
     retry-delay-ms: ${IGDB_WORKER_RETRY_DELAY_MS:2000}
+  background-art:
+    enabled: ${IGDB_BACKGROUND_ART_ENABLED:true}
+    # One hour after the catalog worker, so the night's harvested pools are in hand.
+    cron: ${IGDB_BACKGROUND_ART_CRON:0 30 4 * * *}
+    # Games decided per pass. Raise temporarily for catch-up after a deploy.
+    batch-size: ${IGDB_BACKGROUND_ART_BATCH_SIZE:5000}
+    # Politeness delay between games; each game downloads at most three candidate images.
+    download-delay-ms: ${IGDB_BACKGROUND_ART_DOWNLOAD_DELAY_MS:200}

@@ -28,6 +28,8 @@ public class GameMapper {
             "https://images.igdb.com/igdb/image/upload/t_cover_big_2x/%s.jpg";
     private static final String IGDB_SCREENSHOT_URL_TEMPLATE =
             "https://images.igdb.com/igdb/image/upload/t_screenshot_big/%s.jpg";
+    private static final String IGDB_BACKGROUND_URL_TEMPLATE =
+            "https://images.igdb.com/igdb/image/upload/t_1080p/%s.jpg";
 
     // IGDB DTO -> Game entity, scalar fields only. Collections resolved in GameCacheService.cacheGame.
     public static Game toEntity(IgdbGameDto dto) {
@@ -104,6 +106,12 @@ public class GameMapper {
                 ? String.format(IGDB_COVER_URL_TEMPLATE, game.getCoverImageId())
                 : null;
 
+        String backgroundArtUrl = game.getBackgroundImageId() != null
+                ? String.format(IGDB_BACKGROUND_URL_TEMPLATE, game.getBackgroundImageId())
+                : null;
+        // 'none' is worker bookkeeping (all candidates failed); the API exposes only real sources.
+        String backgroundSource = "none".equals(game.getBackgroundSource()) ? null : game.getBackgroundSource();
+
         List<String> screenshotUrls = readJson(game.getScreenshots(), new TypeReference<List<String>>() {})
                 .stream()
                 .map(id -> String.format(IGDB_SCREENSHOT_URL_TEMPLATE, id))
@@ -165,6 +173,8 @@ public class GameMapper {
                 .totalRatingCount(game.getTotalRatingCount())
                 .backgroundImage(game.getBackgroundImage() != null ? game.getBackgroundImage() : coverImageUrl)
                 .coverImageUrl(coverImageUrl)
+                .backgroundArtUrl(backgroundArtUrl)
+                .backgroundSource(backgroundSource)
                 .released(game.getReleased())
                 .firstReleaseDate(game.getFirstReleaseDate())
                 .hypes(game.getHypes())

@@ -164,6 +164,17 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
     List<Game> findPrefixParentCandidates(@Param("childName") String childName,
                                            @Param("childDbId") Long childDbId);
 
+    // Work list for the background art worker: harvested pool with candidates, no decision yet.
+    // Popularity order matches the catalog walk, so the games users meet first get art first.
+    @Query(value = """
+            SELECT g.* FROM games g
+            WHERE g.background_art_pool IS NOT NULL
+              AND g.background_art_pool <> '[]'
+              AND g.background_source IS NULL
+            ORDER BY g.rating_count DESC NULLS LAST, g.id ASC
+            """, nativeQuery = true)
+    List<Game> findBackgroundArtWork(Pageable pageable);
+
     // Source candidates for the similarity worker: main category games that have no rows in
     // game_similarities yet. Bounded query (Pageable) keeps each tick cheap.
     @Query(value = """

@@ -32,7 +32,9 @@ public class IgdbApiClient {
             "cover.image_id,genres.name,platforms.name,themes.name,keywords.name," +
             "game_modes.name,player_perspectives.name,franchises.name,collections.name," +
             "involved_companies.company.name,involved_companies.developer," +
-            "screenshots.image_id,videos.video_id,videos.name," +
+            "screenshots.image_id,screenshots.width,screenshots.height," +
+            "artworks.image_id,artworks.width,artworks.height," +
+            "videos.video_id,videos.name," +
             "dlcs,expansions,similar_games," +
             "age_ratings.category,age_ratings.rating," +
             "release_dates.date,release_dates.human,release_dates.platform.name," +
