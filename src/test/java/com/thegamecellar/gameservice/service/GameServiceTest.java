@@ -452,7 +452,7 @@ class GameServiceTest {
         dto2.setId(9999);
         dto2.setName("Another Game");
 
-        when(igdbApiClient.fetchCatalogPage(500, 0)).thenReturn(List.of(igdbDto, dto2));
+        when(igdbApiClient.fetchCatalogPageForSync(500, 0)).thenReturn(List.of(igdbDto, dto2));
         when(gameCacheService.cacheIfAbsent(igdbDto)).thenReturn(true);
         when(gameCacheService.cacheIfAbsent(dto2)).thenReturn(true);
 
@@ -465,7 +465,7 @@ class GameServiceTest {
 
     @Test
     void shouldReportFetchedButZeroCachedWhenAllAlreadyInDb() {
-        when(igdbApiClient.fetchCatalogPage(500, 0)).thenReturn(List.of(igdbDto));
+        when(igdbApiClient.fetchCatalogPageForSync(500, 0)).thenReturn(List.of(igdbDto));
         when(gameCacheService.cacheIfAbsent(igdbDto)).thenReturn(false);
 
         CatalogSyncResult result = gameService.syncIgdbCatalogOffset(0, 500);
@@ -481,7 +481,7 @@ class GameServiceTest {
         dto2.setId(9999);
         dto2.setName("Failing Game");
 
-        when(igdbApiClient.fetchCatalogPage(500, 0)).thenReturn(List.of(igdbDto, dto2));
+        when(igdbApiClient.fetchCatalogPageForSync(500, 0)).thenReturn(List.of(igdbDto, dto2));
         when(gameCacheService.cacheIfAbsent(igdbDto)).thenThrow(new RuntimeException("DB error"));
         when(gameCacheService.cacheIfAbsent(dto2)).thenReturn(true);
 

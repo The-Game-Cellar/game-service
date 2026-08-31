@@ -65,3 +65,7 @@ igdb:
     new-releases-pages: ${IGDB_WORKER_NEW_RELEASES_PAGES:10}
     cron: ${IGDB_WORKER_CRON:0 30 3 * * *}
     rate-limit-delay-ms: ${IGDB_WORKER_RATE_LIMIT_DELAY_MS:250}
+    # Bulk pages deep in the catalog run close to 10 s at IGDB; the request-path read-timeout would drop them.
+    read-timeout: ${IGDB_WORKER_READ_TIMEOUT:30000}
+    # Wait before the single retry of a failed page.
+    retry-delay-ms: ${IGDB_WORKER_RETRY_DELAY_MS:2000}

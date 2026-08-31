@@ -721,7 +721,7 @@ public class GameService {
     // ── IGDB catalog worker support ───────────────────────────────────────────
 
     public CatalogSyncResult syncIgdbCatalogOffset(int offset, int limit) {
-        List<IgdbGameDto> results = igdbApiClient.fetchCatalogPage(limit, offset);
+        List<IgdbGameDto> results = igdbApiClient.fetchCatalogPageForSync(limit, offset);
         int cached = 0;
         for (IgdbGameDto dto : results) {
             try {
