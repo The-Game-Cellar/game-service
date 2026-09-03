@@ -4,6 +4,7 @@ import com.thegamecellar.gameservice.model.entity.Game;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -16,6 +17,16 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
 
     // Batch fetch via igdb_id IN (...). Used by rec-service worker hydration + read path.
     List<Game> findByIgdbIdIn(java.util.Collection<Integer> igdbIds);
+
+    // Closes the nightly cellar-rating pass: anything the run did not write is no longer
+    // rated by anyone. A bulk update rather than a read-modify-save, since the rows being
+    // cleared are exactly the ones nothing else in the pass has loaded.
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE Game g SET g.cellarRatingAvg = NULL, g.cellarRatingCount = NULL, g.cellarRatingRunId = NULL
+            WHERE g.cellarRatingAvg IS NOT NULL AND (g.cellarRatingRunId IS NULL OR g.cellarRatingRunId <> :runId)
+            """)
+    int clearCellarRatingsNotFromRun(@Param("runId") String runId);
 
     // Default filter: category IN (0, 8) OR NULL. Remakes count as main games; variants live in the *Variants methods below.
 

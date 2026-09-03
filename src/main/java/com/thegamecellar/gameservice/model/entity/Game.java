@@ -43,12 +43,26 @@ public class Game {
     @Column(name = "rating_count")
     private Integer ratingCount;
 
-    // User score (IGDB total_rating) normalised to 0-10.
+    // IGDB total_rating normalised to 0-10: critics and IGDB members averaged together,
+    // not a pure user score. IGDB's own member-only score is a separate field we do not fetch.
     @Column(name = "total_rating", precision = 4, scale = 2)
     private BigDecimal totalRating;
 
     @Column(name = "total_rating_count")
     private Integer totalRatingCount;
+
+    // Raw aggregate of this site's members, posted nightly by library-service. NULL means
+    // nobody here has rated it, which differs from an average of zero.
+    @Column(name = "cellar_rating_avg", precision = 4, scale = 2)
+    private BigDecimal cellarRatingAvg;
+
+    @Column(name = "cellar_rating_count")
+    private Integer cellarRatingCount;
+
+    // The nightly pass that last wrote the two fields above. Rows left on an older run id
+    // are cleared after the pass, which is the only way a deleted last rating disappears.
+    @Column(name = "cellar_rating_run_id", length = 36)
+    private String cellarRatingRunId;
 
     @Column(name = "background_image", length = 500)
     private String backgroundImage;

@@ -77,3 +77,9 @@ igdb:
     batch-size: ${IGDB_BACKGROUND_ART_BATCH_SIZE:5000}
     # Politeness delay between games; each game downloads at most three candidate images.
     download-delay-ms: ${IGDB_BACKGROUND_ART_DOWNLOAD_DELAY_MS:200}
+
+cellar:
+  ratings:
+    # Votes needed to pull a game halfway from the IGDB score to our members' average.
+    # Raising it makes the blend more conservative; the stored aggregates never change.
+    prior-weight: ${CELLAR_RATING_PRIOR_WEIGHT:10}
