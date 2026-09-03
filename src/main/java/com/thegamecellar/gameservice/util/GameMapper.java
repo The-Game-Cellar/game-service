@@ -89,7 +89,33 @@ public class GameMapper {
                 .orElse(null);
     }
 
+    // Default prior weight, used by the overload that takes none. Callers holding the
+    // configured value pass it in; this keeps the many method-reference call sites working.
+    public static final int DEFAULT_CELLAR_PRIOR_WEIGHT = 10;
+
+    /**
+     * Members' average blended towards the IGDB score, so few votes cannot swing a game.
+     * Null only when the game has neither member ratings nor an IGDB score.
+     */
+    public static BigDecimal cellarRating(BigDecimal memberAvg, Integer memberCount,
+                                          BigDecimal igdbRating, int priorWeight) {
+        int n = memberCount != null ? memberCount : 0;
+        if (n <= 0 || memberAvg == null) {
+            return igdbRating;
+        }
+        if (igdbRating == null) {
+            return memberAvg.setScale(2, RoundingMode.HALF_UP);
+        }
+        BigDecimal weighted = memberAvg.multiply(BigDecimal.valueOf(n))
+                .add(igdbRating.multiply(BigDecimal.valueOf(priorWeight)));
+        return weighted.divide(BigDecimal.valueOf((long) n + priorWeight), 2, RoundingMode.HALF_UP);
+    }
+
     public static GameResponse toResponse(Game game) {
+        return toResponse(game, DEFAULT_CELLAR_PRIOR_WEIGHT);
+    }
+
+    public static GameResponse toResponse(Game game, int cellarPriorWeight) {
         List<String> genres = game.getGenres().stream().map(Genre::getName).toList();
         List<String> platforms = game.getPlatforms().stream().map(Platform::getName).toList();
         List<String> tags = game.getTags().stream().map(Tag::getName).toList();
@@ -171,6 +197,9 @@ public class GameMapper {
                 .ratingCount(game.getRatingCount())
                 .totalRating(game.getTotalRating())
                 .totalRatingCount(game.getTotalRatingCount())
+                .cellarRating(cellarRating(game.getCellarRatingAvg(), game.getCellarRatingCount(),
+                        game.getTotalRating(), cellarPriorWeight))
+                .cellarRatingCount(game.getCellarRatingCount())
                 .backgroundImage(game.getBackgroundImage() != null ? game.getBackgroundImage() : coverImageUrl)
                 .coverImageUrl(coverImageUrl)
                 .backgroundArtUrl(backgroundArtUrl)

@@ -110,6 +110,43 @@ class GameMapperTest {
     }
 
     @Test
+    void shouldBlendTheCellarRatingAndCarryItsCount() {
+        Game rated = Game.builder()
+                .igdbId(1)
+                .name("Rated")
+                .totalRating(new BigDecimal("8.50"))
+                .cellarRatingAvg(new BigDecimal("10.00"))
+                .cellarRatingCount(1)
+                .genres(new HashSet<>())
+                .platforms(new HashSet<>())
+                .tags(new HashSet<>())
+                .themes(new HashSet<>())
+                .build();
+
+        GameResponse response = GameMapper.toResponse(rated, 10);
+
+        assertThat(response.getCellarRating()).isEqualByComparingTo("8.64");
+        assertThat(response.getCellarRatingCount()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldLeaveCellarRatingNullWhenNeitherMembersNorIgdbHaveScored() {
+        Game unscored = Game.builder()
+                .igdbId(2)
+                .name("Unscored")
+                .genres(new HashSet<>())
+                .platforms(new HashSet<>())
+                .tags(new HashSet<>())
+                .themes(new HashSet<>())
+                .build();
+
+        GameResponse response = GameMapper.toResponse(unscored);
+
+        assertThat(response.getCellarRating()).isNull();
+        assertThat(response.getCellarRatingCount()).isNull();
+    }
+
+    @Test
     void shouldReturnEmptyDevelopersListWhenDevelopersIsNull() {
         Game game = Game.builder()
                 .igdbId(1)

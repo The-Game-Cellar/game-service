@@ -24,6 +24,7 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -50,6 +51,10 @@ public class GameService {
     private final GameCacheService gameCacheService;
     private final IgdbApiClient igdbApiClient;
     private final GameSimilarityRepository similarityRepository;
+
+    // Votes needed to pull a game halfway from the IGDB score to our members' average.
+    @Value("${cellar.ratings.prior-weight:10}")
+    private int cellarPriorWeight;
 
     @PersistenceContext
     private EntityManager em;
@@ -104,18 +109,18 @@ public class GameService {
                 try {
                     IgdbGameDto dto = igdbApiClient.fetchGameById(igdbId);
                     Game refreshed = gameCacheService.refreshStaleGame(game, dto);
-                    return augmentInferredParent(refreshed, GameMapper.toResponse(refreshed));
+                    return augmentInferredParent(refreshed, GameMapper.toResponse(refreshed, cellarPriorWeight));
                 } catch (Exception e) {
                     log.warn("Could not re-fetch stale game igdbId={}: {}", igdbId, e.getMessage());
-                    return augmentInferredParent(game, GameMapper.toResponse(game));
+                    return augmentInferredParent(game, GameMapper.toResponse(game, cellarPriorWeight));
                 }
             }
-            return augmentInferredParent(game, GameMapper.toResponse(game));
+            return augmentInferredParent(game, GameMapper.toResponse(game, cellarPriorWeight));
         }
 
         IgdbGameDto dto = igdbApiClient.fetchGameById(igdbId);
         Game saved = gameCacheService.cacheGame(dto);
-        return augmentInferredParent(saved, GameMapper.toResponse(saved));
+        return augmentInferredParent(saved, GameMapper.toResponse(saved, cellarPriorWeight));
     }
 
     // Reads from pre-computed game_similarities (catalog-side, no user context). Falls back to
@@ -135,7 +140,7 @@ public class GameService {
         return ids.stream()
                 .map(byId::get)
                 .filter(java.util.Objects::nonNull)
-                .map(g -> augmentInferredParent(g, GameMapper.toResponse(g)))
+                .map(g -> augmentInferredParent(g, GameMapper.toResponse(g, cellarPriorWeight)))
                 .toList();
     }
 
@@ -222,7 +227,7 @@ public class GameService {
 
         if (result.getTotalElements() > 0) {
             return GameSearchResponse.builder()
-                    .games(result.getContent().stream().map(GameMapper::toResponse).toList())
+                    .games(result.getContent().stream().map(entity -> GameMapper.toResponse(entity, cellarPriorWeight)).toList())
                     .totalCount((int) Math.min(result.getTotalElements(), Integer.MAX_VALUE))
                     .page(page)
                     .pageSize(pageSize)
@@ -556,7 +561,7 @@ public class GameService {
     @Transactional(readOnly = true)
     public GameSearchResponse getRandomGames(int limit) {
         List<GameResponse> games = gameRepository.findRandom(limit).stream()
-                .map(GameMapper::toResponse)
+                .map(entity -> GameMapper.toResponse(entity, cellarPriorWeight))
                 .toList();
         return GameSearchResponse.builder()
                 .games(games)
@@ -569,7 +574,7 @@ public class GameService {
     @Transactional(readOnly = true)
     public GameSearchResponse getRandomQualityByGenre(String genre, java.math.BigDecimal minRating, int minVotes, int limit) {
         List<GameResponse> games = gameRepository.findRandomQualityByGenre(genre, minRating, minVotes, limit).stream()
-                .map(GameMapper::toResponse)
+                .map(entity -> GameMapper.toResponse(entity, cellarPriorWeight))
                 .toList();
         return GameSearchResponse.builder()
                 .games(games)
@@ -612,7 +617,7 @@ public class GameService {
         Sort sort = Sort.by(Sort.Order.asc("released").nullsLast());
         List<Game> raw = gameRepository.findByFranchiseName(franchiseName, PageRequest.of(0, Math.min(limit * 4, 100), sort));
         return dedupeVariants(raw, excludeIgdbId, limit).stream()
-                .map(GameMapper::toResponse)
+                .map(entity -> GameMapper.toResponse(entity, cellarPriorWeight))
                 .toList();
     }
 
@@ -621,7 +626,7 @@ public class GameService {
         Sort sort = Sort.by(Sort.Order.asc("released").nullsLast());
         List<Game> raw = gameRepository.findByCollectionName(collectionName, PageRequest.of(0, Math.min(limit * 4, 100), sort));
         return dedupeVariants(raw, excludeIgdbId, limit).stream()
-                .map(GameMapper::toResponse)
+                .map(entity -> GameMapper.toResponse(entity, cellarPriorWeight))
                 .toList();
     }
 
@@ -630,7 +635,7 @@ public class GameService {
         Sort sort = Sort.by(Sort.Order.desc("released").nullsLast());
         List<Game> raw = gameRepository.findByDeveloperName(developerName, PageRequest.of(0, Math.min(limit * 4, 100), sort));
         return dedupeVariants(raw, excludeIgdbId, limit).stream()
-                .map(GameMapper::toResponse)
+                .map(entity -> GameMapper.toResponse(entity, cellarPriorWeight))
                 .toList();
     }
 
@@ -650,7 +655,7 @@ public class GameService {
                         .comparing(Game::getReleased,
                                 java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))
                         .thenComparingInt(g -> g.getName() == null ? 0 : g.getName().length()))
-                .map(GameMapper::toResponse)
+                .map(entity -> GameMapper.toResponse(entity, cellarPriorWeight))
                 .toList();
     }
 
@@ -831,7 +836,7 @@ public class GameService {
                 : new java.util.HashSet<>(recentlyShownIds);
 
         return weightedSampleByInverseDays(unique, now, recentSet, limit).stream()
-                .map(GameMapper::toResponse)
+                .map(entity -> GameMapper.toResponse(entity, cellarPriorWeight))
                 .toList();
     }
 
@@ -878,7 +883,7 @@ public class GameService {
         if (from >= total) return new UpcomingPage(List.of(), total);
         int to = Math.min(total, from + pageSize);
         List<GameResponse> slice = unique.subList(from, to).stream()
-                .map(GameMapper::toResponse)
+                .map(entity -> GameMapper.toResponse(entity, cellarPriorWeight))
                 .toList();
         return new UpcomingPage(slice, total);
     }

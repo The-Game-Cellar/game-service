@@ -14,11 +14,17 @@ public class GameResponse {
     private String description;
     private String storyline;
 
-    // Critic + user scores normalised to 0-10. See GameMapper.normalizeRating.
+    // IGDB scores normalised to 0-10. See GameMapper.normalizeRating.
+    // rating is the critic score; totalRating is IGDB's critics-and-members blend.
     private BigDecimal rating;
     private Integer ratingCount;
     private BigDecimal totalRating;
     private Integer totalRatingCount;
+
+    // This site's own score: member ratings blended against totalRating with a Bayesian
+    // prior, computed on read. Null when nobody here has rated it and IGDB has no score.
+    private BigDecimal cellarRating;
+    private Integer cellarRatingCount;
 
     private String backgroundImage;
     private String coverImageUrl;

@@ -67,6 +67,10 @@ A small set of columns are stored as JSON-as-`TEXT` (`screenshots`, `videos`, `d
 
 `games` also carries a decided background image for full-bleed surfaces. The catalog sync stores raw artwork/screenshot candidates (id + dimensions) in `background_art_pool`; a nightly background art worker then downloads up to three candidates per game, quality-checks them (file size, grey entropy, colour count) and stores the winner as `background_image_id` + `background_source` (`artwork`/`screenshot`, or `none` when every candidate failed). Served as `backgroundArtUrl` (a `t_1080p` CDN URL) and `backgroundSource` on `GameResponse`.
 
+`games` also carries the Cellar score inputs: `cellar_rating_avg NUMERIC(4,2)`, `cellar_rating_count INTEGER` and `cellar_rating_run_id VARCHAR(36)`, all nullable. The first two are raw aggregates of what this site's members rated the game, posted nightly by library-service through `POST /internal/games/ratings`; both NULL means nobody here has rated it, which is deliberately distinct from an average of zero. The blend against `total_rating` is computed on read (`cellar = (n * avg + k * totalRating) / (n + k)`, `k` from `CELLAR_RATING_PRIOR_WEIGHT`) and served as `cellarRating` + `cellarRatingCount` on `GameResponse`, so the weight can change without recomputing anything stored. `cellarRating` is null only when the game has neither member ratings nor an IGDB score.
+
+Note that the two IGDB scores are not what their names suggest: `rating` is the critic score (IGDB `aggregated_rating`), and `total_rating` is IGDB's own blend of critics and IGDB members, not a pure user score. Both are stored normalized to 0-10 (divide by 10). IGDB's member-only score is a separate field the catalog does not request.
+
 `platforms` carries three curation columns (`is_preference_eligible BOOLEAN`, `category VARCHAR(20)`, `display_order INT`) used by `/api/v1/platforms/catalog` to drive the Preferences picker. Curation is declared in `src/main/resources/platform-curation.yaml` and is authoritative in both directions: a platform listed there is flagged eligible with its category and order, one absent from it is reset to the column defaults. Platform rows are created by the IGDB catalog sync at runtime, not by a migration, so the file is applied twice: `GameCacheService` curates a row as it inserts it, and `PlatformCurationReconciler` reconciles every existing row at startup. Edit the file and restart the service.
 
 ## API Endpoints
@@ -106,8 +110,12 @@ A small set of columns are stored as JSON-as-`TEXT` (`screenshots`, `videos`, `d
 | GET    | `/internal/games/{igdbId}`                    | Single game (used by similar-graph traversal in worker).          |
 | GET    | `/internal/games/popular?platform=...`        | Popular games per platform (Tier-3 fallback in worker).           |
 | GET    | `/internal/games/random-quality?genre=...`    | Random-quality candidates by genre (Tier-1/2 in worker).          |
+| POST   | `/internal/games/ratings?runId=...`           | Stores a batch of member-rating aggregates from library-service.  |
+| POST   | `/internal/games/ratings/prune?runId=...`     | Closes that pass, clearing aggregates an older run wrote.         |
 
-Used by the recommendation-service per-user worker. Protected by `InternalAuthFilter`: requires header `X-Internal-Token: {INTERNAL_SERVICE_TOKEN}` (constant-time compare, fail-closed when the env var is unset). The api-gateway has no route for `/internal/**`, so the paths are only reachable inside the docker network.
+The two `ratings` paths take the nightly Cellar score pass from library-service. The body is a list of `{igdbGameId, average, count}`, aggregates only, so no per-user data crosses the boundary. Ids the catalog does not hold are skipped rather than rejected. The pass is a full replacement sent in batches of 500 under one `runId`, and the prune clears every row still tagged with an older run: without it a game whose last rating was deleted would keep its average forever, since it stops appearing in the aggregate rather than arriving with a zero.
+
+The read endpoints are used by the recommendation-service per-user worker. Protected by `InternalAuthFilter`: requires header `X-Internal-Token: {INTERNAL_SERVICE_TOKEN}` (constant-time compare, fail-closed when the env var is unset). The api-gateway has no route for `/internal/**`, so the paths are only reachable inside the docker network.
 
 ## Configuration
 
@@ -134,6 +142,7 @@ Used by the recommendation-service per-user worker. Protected by `InternalAuthFi
 | `IGDB_BACKGROUND_ART_CRON`            | `0 30 4 * * *`                     | Art worker cron, one hour after the catalog worker so the night's harvested pools are in hand |
 | `IGDB_BACKGROUND_ART_BATCH_SIZE`      | `5000`                             | Games decided per art pass; raise temporarily for catch-up |
 | `IGDB_BACKGROUND_ART_DOWNLOAD_DELAY_MS` | `200`                            | Politeness delay between games; each game downloads at most three candidate images |
+| `CELLAR_RATING_PRIOR_WEIGHT`          | `10`                               | Votes needed to pull a game halfway from the IGDB score to the members' average. Applied on read, so changing it needs a restart and no recomputation. |
 | `INTERNAL_SERVICE_TOKEN`              | (required for /internal/** auth)   | Shared secret accepted by `InternalAuthFilter` on `/internal/**`. Fail-closed when unset. |
 | `SENTRY_DSN`                          | (empty)                            | Sentry ingest endpoint. Empty makes the SDK a no-op, so local runs and tests send nothing. Set in production only. |
 | `SENTRY_ENVIRONMENT`                  | `local`                            | Environment tag on every Sentry event            |

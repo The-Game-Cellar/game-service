@@ -17,6 +17,10 @@ spring:
   flyway:
     enabled: false
 
+security:
+  internal:
+    token: test-internal-token
+
 igdb:
   client-id: test-client-id
   client-secret: test-client-secret
