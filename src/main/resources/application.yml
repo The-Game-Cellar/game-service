@@ -11,6 +11,9 @@ spring:
     username: ${GAME_DB_USERNAME}
     password: ${GAME_DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      # A runaway statement is cancelled before it can grow into the database container's memory ceiling.
+      connection-init-sql: SET statement_timeout = '30s'
   jpa:
     hibernate:
       ddl-auto: ${DDL_AUTO:validate}
@@ -21,6 +24,11 @@ spring:
     baseline-on-migrate: true
     clean-disabled: true
     locations: classpath:db/migration
+    # Flyway on its own connection, outside the pool, so migrations never carry the statement timeout
+    # above; an index build on the catalog can outlive it.
+    url: ${GAME_DB_URL}
+    user: ${GAME_DB_USERNAME}
+    password: ${GAME_DB_PASSWORD}
 
 server:
   port: ${GAME_SERVICE_PORT:8081}

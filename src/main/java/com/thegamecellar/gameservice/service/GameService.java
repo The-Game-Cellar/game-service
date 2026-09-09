@@ -17,9 +17,11 @@ import com.thegamecellar.gameservice.util.GameMapper;
 import com.thegamecellar.gameservice.util.PlatformGroups;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Tuple;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import lombok.RequiredArgsConstructor;
@@ -210,9 +212,8 @@ public class GameService {
         Specification<Game> spec = buildSearchSpec(query, platform, genre, gameType, gameMode, perspective, releasedFrom, releasedTo, tags, ratingFrom);
         Page<Game> result = gameRepository.findAll(spec, pageable);
 
-        // Facet counts via native SQL UNION ALL, men bara när user faktiskt filtrerar -- annars matchar spec hela
-        // katalogen (~150k spel) och count-queries skannar tre join-tabeller i sin helhet. Frontend visar inga counts
-        // i cold state, så fort user picks första filter aktiveras count-pathen mot mindre subset.
+        // Facet counts only once the user filters: the cold state matches the whole catalog, and the frontend
+        // shows no counts there anyway.
         boolean anyUserFilterActive = isSet(query) || isSet(platform) || isSet(genre)
                 || isSet(gameMode) || isSet(perspective) || isSet(tags)
                 || ratingFrom != null || releasedFrom != null || releasedTo != null;
@@ -313,17 +314,14 @@ public class GameService {
                 .toList();
     }
 
-    // Per-facet counts in one shot: hämta spec-game-IDs via Criteria (utnyttjar samma Specification som page-query),
-    // sen en enda native SQL UNION ALL över 4 facet-tabeller scoped till de IDs. 5 round-trips → 3 (page-data + ids + union),
-    // och varje facet-arm ärver inga spec-joins så query-plan blir platt.
     public record FacetCounts(Map<String, Long> tag, Map<String, Long> genre, Map<String, Long> gameMode, Map<String, Long> perspective) {
-        // Zero-maps: spec gav 0 träffar -- alla candidates ska visas som "no match" (gray-out i UI).
+        // Every candidate at zero: the search matched nothing, the UI greys them all out.
         public static FacetCounts zeros(List<String> tagCandidates, List<String> genreCandidates,
                                         List<String> gameModeCandidates, List<String> perspectiveCandidates) {
             return new FacetCounts(zeroMap(tagCandidates), zeroMap(genreCandidates),
                     zeroMap(gameModeCandidates), zeroMap(perspectiveCandidates));
         }
-        // Null-maps: counts beräknades inte (cold path / inget user-filter aktivt). UI hoppar gray-out helt.
+        // Null maps: counts were not computed (no user filter active), the UI skips the grey-out entirely.
         public static FacetCounts skipped() {
             return new FacetCounts(null, null, null, null);
         }
@@ -341,86 +339,44 @@ public class GameService {
         if (em == null) {
             return FacetCounts.zeros(tagCandidates, genreCandidates, gameModeCandidates, perspectiveCandidates);
         }
+        return new FacetCounts(
+                facetCounts(spec, "tags", tagCandidates),
+                facetCounts(spec, "genres", genreCandidates),
+                facetCounts(spec, "gameModes", gameModeCandidates),
+                facetCounts(spec, "playerPerspectives", perspectiveCandidates));
+    }
 
-        // Step 1: spec → matchande game-IDs. Criteria återanvänder Specification så DRY.
+    // One grouped query per facet, the search predicate joined to the facet's dimension, so the matching ids never
+    // leave the database. The previous form pulled every matching id into Java and inlined the list as literal
+    // IN (...) constants; a one-letter query produced half a million constants and OOM-killed the production database.
+    private Map<String, Long> facetCounts(Specification<Game> spec, String collection, List<String> candidates) {
+        Map<String, Long> counts = FacetCounts.zeroMap(candidates);
+        if (candidates.isEmpty()) {
+            return counts;
+        }
         CriteriaBuilder cb = em.getCriteriaBuilder();
-        CriteriaQuery<Long> idQuery = cb.createQuery(Long.class);
-        Root<Game> idRoot = idQuery.from(Game.class);
-        Predicate idPred = spec != null ? spec.toPredicate(idRoot, idQuery, cb) : null;
-        idQuery.select(idRoot.get("id")).distinct(true);
-        if (idPred != null) idQuery.where(idPred);
-        List<Long> specIds = em.createQuery(idQuery).getResultList();
-        if (specIds.isEmpty()) {
-            return FacetCounts.zeros(tagCandidates, genreCandidates, gameModeCandidates, perspectiveCandidates);
-        }
-
-        // Step 2: native UNION ALL för 4 facets, scoped till specIds. IDs inlineas som literal BIGINT-lista i SQL
-        // (säkert -- IDs är numeriska från egen DB, ingen injection-yta). Hibernate kan tolka samma named-list-param
-        // över flera UNION-armar inkonsistent, så vi undviker det helt. Candidates (string-listor) stannar som named params.
-        String idsLiteral = specIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
-        StringBuilder sql = new StringBuilder("SELECT facet, facet_value, cnt FROM (");
-        Map<String, Object> params = new LinkedHashMap<>();
-        List<String> arms = new ArrayList<>();
-        if (!tagCandidates.isEmpty()) {
-            arms.add("SELECT 'tag' AS facet, t.name AS facet_value, COUNT(DISTINCT gt.game_id) AS cnt "
-                    + "FROM game_tags gt JOIN tags t ON t.id = gt.tag_id "
-                    + "WHERE gt.game_id IN (" + idsLiteral + ") AND LOWER(t.name) IN (:tagLower) GROUP BY t.name");
-            params.put("tagLower", tagCandidates.stream().map(String::toLowerCase).toList());
-        }
-        if (!genreCandidates.isEmpty()) {
-            arms.add("SELECT 'genre' AS facet, ge.name AS facet_value, COUNT(DISTINCT gg.game_id) AS cnt "
-                    + "FROM game_genres gg JOIN genres ge ON ge.id = gg.genre_id "
-                    + "WHERE gg.game_id IN (" + idsLiteral + ") AND LOWER(ge.name) IN (:genreLower) GROUP BY ge.name");
-            params.put("genreLower", genreCandidates.stream().map(String::toLowerCase).toList());
-        }
-        if (!gameModeCandidates.isEmpty()) {
-            arms.add("SELECT 'gameMode' AS facet, gm.name AS facet_value, COUNT(DISTINCT ggm.game_id) AS cnt "
-                    + "FROM game_game_modes ggm JOIN game_modes gm ON gm.id = ggm.game_mode_id "
-                    + "WHERE ggm.game_id IN (" + idsLiteral + ") AND LOWER(gm.name) IN (:gameModeLower) GROUP BY gm.name");
-            params.put("gameModeLower", gameModeCandidates.stream().map(String::toLowerCase).toList());
-        }
-        if (!perspectiveCandidates.isEmpty()) {
-            arms.add("SELECT 'perspective' AS facet, pp.name AS facet_value, COUNT(DISTINCT gpp.game_id) AS cnt "
-                    + "FROM game_player_perspectives gpp JOIN player_perspectives pp ON pp.id = gpp.player_perspective_id "
-                    + "WHERE gpp.game_id IN (" + idsLiteral + ") AND LOWER(pp.name) IN (:perspectiveLower) GROUP BY pp.name");
-            params.put("perspectiveLower", perspectiveCandidates.stream().map(String::toLowerCase).toList());
-        }
-        if (arms.isEmpty()) {
-            return FacetCounts.zeros(tagCandidates, genreCandidates, gameModeCandidates, perspectiveCandidates);
-        }
-        sql.append(String.join(" UNION ALL ", arms)).append(") all_facets");
-
-        jakarta.persistence.Query nq = em.createNativeQuery(sql.toString());
-        params.forEach(nq::setParameter);
-        @SuppressWarnings("unchecked")
-        List<Object[]> rows = nq.getResultList();
-
-        Map<String, Long> tagMap = FacetCounts.zeroMap(tagCandidates);
-        Map<String, Long> genreMap = FacetCounts.zeroMap(genreCandidates);
-        Map<String, Long> gameModeMap = FacetCounts.zeroMap(gameModeCandidates);
-        Map<String, Long> perspectiveMap = FacetCounts.zeroMap(perspectiveCandidates);
-
-        for (Object[] r : rows) {
-            String facet = (String) r[0];
-            String value = (String) r[1];
-            Long count = ((Number) r[2]).longValue();
-            Map<String, Long> target;
-            List<String> candidatesForFacet;
-            switch (facet) {
-                case "tag" -> { target = tagMap; candidatesForFacet = tagCandidates; }
-                case "genre" -> { target = genreMap; candidatesForFacet = genreCandidates; }
-                case "gameMode" -> { target = gameModeMap; candidatesForFacet = gameModeCandidates; }
-                case "perspective" -> { target = perspectiveMap; candidatesForFacet = perspectiveCandidates; }
-                default -> { continue; }
-            }
-            for (String orig : candidatesForFacet) {
+        CriteriaQuery<Tuple> cq = cb.createTupleQuery();
+        Root<Game> root = cq.from(Game.class);
+        Predicate searchPred = spec != null ? spec.toPredicate(root, cq, cb) : null;
+        var dim = root.join(collection, JoinType.INNER);
+        Path<String> name = dim.get("name");
+        Predicate inCandidates = cb.lower(name).in(candidates.stream().map(String::toLowerCase).toList());
+        cq.multiselect(name, cb.countDistinct(root.get("id")));
+        cq.where(searchPred != null ? cb.and(searchPred, inCandidates) : inCandidates);
+        cq.groupBy(name);
+        // The spec sets distinct on the query for its own row-multiplying joins; a grouped count does not need it.
+        cq.distinct(false);
+        for (Tuple row : em.createQuery(cq).getResultList()) {
+            String value = row.get(0, String.class);
+            long count = row.get(1, Long.class);
+            for (String orig : candidates) {
                 if (orig.equalsIgnoreCase(value)) {
-                    target.put(orig, count);
+                    counts.put(orig, count);
                     break;
                 }
             }
         }
-        return new FacetCounts(tagMap, genreMap, gameModeMap, perspectiveMap);
+        return counts;
     }
 
     private static Specification<Game> buildSearchSpec(String query, String platform, String genre,
@@ -457,7 +413,7 @@ public class GameService {
             }
 
             if (isSet(genre)) {
-                // CSV + AND: separat INNER JOIN per genre, raden måste matcha alla samtidigt.
+                // CSV is AND: one inner join per genre, so a row must carry all of them.
                 for (String wanted : splitCsvLower(genre)) {
                     var genreJoin = root.join("genres", JoinType.INNER);
                     preds.add(cb.equal(cb.lower(genreJoin.get("name")), wanted));
@@ -492,7 +448,7 @@ public class GameService {
             }
 
             if (isSet(tags)) {
-                // AND-semantik: en separat INNER JOIN per tag, raden måste matcha alla samtidigt.
+                // CSV is AND: one inner join per tag, so a row must carry all of them.
                 for (String wanted : splitCsvLower(tags)) {
                     var tagJoin = root.join("tags", JoinType.INNER);
                     preds.add(cb.equal(cb.lower(tagJoin.get("name")), wanted));
