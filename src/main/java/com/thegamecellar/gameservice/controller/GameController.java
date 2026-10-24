@@ -47,10 +47,11 @@ public class GameController {
             @RequestParam(required = false) Long releasedFrom,
             @RequestParam(required = false) Long releasedTo,
             @RequestParam(required = false) String tags,
-            @RequestParam(required = false) java.math.BigDecimal ratingFrom) {
+            @RequestParam(required = false) java.math.BigDecimal ratingFrom,
+            @RequestParam(defaultValue = "any") @Pattern(regexp = "any|all") String match) {
         return ResponseEntity.ok(gameService.searchGames(
                 query, platform, genre, ordering, page, pageSize, dbOnly,
-                gameType, gameMode, perspective, releasedFrom, releasedTo, tags, ratingFrom));
+                gameType, gameMode, perspective, releasedFrom, releasedTo, tags, ratingFrom, match));
     }
 
     @GetMapping("/popular")

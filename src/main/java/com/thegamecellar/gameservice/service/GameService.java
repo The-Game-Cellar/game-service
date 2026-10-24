@@ -200,16 +200,29 @@ public class GameService {
                 gameType, gameMode, perspective, releasedFrom, releasedTo, tags, null);
     }
 
-    // Single Specification AND-s every filter so combinations work; prior fan-out missed filters when 2+ were set.
     @Transactional
     public GameSearchResponse searchGames(String query, String platform, String genre,
                                             String ordering, int page, int pageSize, boolean dbOnly,
                                             String gameType, String gameMode, String perspective,
                                             Long releasedFrom, Long releasedTo, String tags,
                                             java.math.BigDecimal ratingFrom) {
-        PageRequest pageable = PageRequest.of(page, pageSize, sortFromOrdering(ordering));
+        return searchGames(query, platform, genre, ordering, page, pageSize, dbOnly,
+                gameType, gameMode, perspective, releasedFrom, releasedTo, tags, ratingFrom, "any");
+    }
 
-        Specification<Game> spec = buildSearchSpec(query, platform, genre, gameType, gameMode, perspective, releasedFrom, releasedTo, tags, ratingFrom);
+    // Single Specification AND-s every filter so combinations work; prior fan-out missed filters when 2+ were set.
+    // match decides how the chosen values inside genre, tags, game mode and perspective combine; platform always takes any.
+    @Transactional
+    public GameSearchResponse searchGames(String query, String platform, String genre,
+                                            String ordering, int page, int pageSize, boolean dbOnly,
+                                            String gameType, String gameMode, String perspective,
+                                            Long releasedFrom, Long releasedTo, String tags,
+                                            java.math.BigDecimal ratingFrom, String match) {
+        PageRequest pageable = PageRequest.of(page, pageSize, sortFromOrdering(ordering));
+        boolean matchAll = "all".equalsIgnoreCase(match);
+
+        Specification<Game> spec = buildSearchSpec(query, platform, genre, gameType, gameMode, perspective,
+                releasedFrom, releasedTo, tags, ratingFrom, matchAll, null);
         Page<Game> result = gameRepository.findAll(spec, pageable);
 
         // Facet counts only once the user filters: the cold state matches the whole catalog, and the frontend
@@ -219,7 +232,12 @@ public class GameService {
                 || ratingFrom != null || releasedFrom != null || releasedTo != null;
         FacetCounts facets;
         if (anyUserFilterActive) {
-            facets = computeAllFacetCounts(spec,
+            // Under any a facet's own picks are left out of its counts, so a value shows what a click on it would
+            // add; under all they stay in, so a value shows what is left if it is added too.
+            java.util.function.Function<String, Specification<Game>> countSpec = facet -> matchAll ? spec
+                    : buildSearchSpec(query, platform, genre, gameType, gameMode, perspective,
+                            releasedFrom, releasedTo, tags, ratingFrom, false, facet);
+            facets = computeAllFacetCounts(countSpec,
                     getPopularTags(50), genreRepository.findAllNames(),
                     CURATED_GAME_MODES, CURATED_PERSPECTIVES);
         } else {
@@ -333,17 +351,17 @@ public class GameService {
     }
 
     private FacetCounts computeAllFacetCounts(
-            Specification<Game> spec,
+            java.util.function.Function<String, Specification<Game>> specFor,
             List<String> tagCandidates, List<String> genreCandidates,
             List<String> gameModeCandidates, List<String> perspectiveCandidates) {
         if (em == null) {
             return FacetCounts.zeros(tagCandidates, genreCandidates, gameModeCandidates, perspectiveCandidates);
         }
         return new FacetCounts(
-                facetCounts(spec, "tags", tagCandidates),
-                facetCounts(spec, "genres", genreCandidates),
-                facetCounts(spec, "gameModes", gameModeCandidates),
-                facetCounts(spec, "playerPerspectives", perspectiveCandidates));
+                facetCounts(specFor.apply("tags"), "tags", tagCandidates),
+                facetCounts(specFor.apply("genres"), "genres", genreCandidates),
+                facetCounts(specFor.apply("gameModes"), "gameModes", gameModeCandidates),
+                facetCounts(specFor.apply("playerPerspectives"), "playerPerspectives", perspectiveCandidates));
     }
 
     // One grouped query per facet, the search predicate joined to the facet's dimension, so the matching ids never
@@ -379,10 +397,12 @@ public class GameService {
         return counts;
     }
 
+    // skipFacet leaves that facet's own predicate out, for its counts under any.
     private static Specification<Game> buildSearchSpec(String query, String platform, String genre,
                                                          String gameType, String gameMode, String perspective,
                                                          Long releasedFrom, Long releasedTo, String tags,
-                                                         java.math.BigDecimal ratingFrom) {
+                                                         java.math.BigDecimal ratingFrom,
+                                                         boolean matchAll, String skipFacet) {
         return (root, cq, cb) -> {
             cq.distinct(true);
             List<Predicate> preds = new ArrayList<>();
@@ -412,12 +432,8 @@ public class GameService {
                 preds.add(cb.like(cb.lower(root.get("name")), "%" + query.toLowerCase() + "%"));
             }
 
-            if (isSet(genre)) {
-                // CSV is AND: one inner join per genre, so a row must carry all of them.
-                for (String wanted : splitCsvLower(genre)) {
-                    var genreJoin = root.join("genres", JoinType.INNER);
-                    preds.add(cb.equal(cb.lower(genreJoin.get("name")), wanted));
-                }
+            if (isSet(genre) && !"genres".equals(skipFacet)) {
+                preds.add(facetPredicate(root, cb, "genres", splitCsvLower(genre), matchAll));
             }
 
             if (isSet(platform)) {
@@ -433,26 +449,16 @@ public class GameService {
                 }
             }
 
-            if (isSet(gameMode)) {
-                for (String wanted : splitCsvLower(gameMode)) {
-                    var modeJoin = root.join("gameModes", JoinType.INNER);
-                    preds.add(cb.equal(cb.lower(modeJoin.get("name")), wanted));
-                }
+            if (isSet(gameMode) && !"gameModes".equals(skipFacet)) {
+                preds.add(facetPredicate(root, cb, "gameModes", splitCsvLower(gameMode), matchAll));
             }
 
-            if (isSet(perspective)) {
-                for (String wanted : splitCsvLower(perspective)) {
-                    var perspJoin = root.join("playerPerspectives", JoinType.INNER);
-                    preds.add(cb.equal(cb.lower(perspJoin.get("name")), wanted));
-                }
+            if (isSet(perspective) && !"playerPerspectives".equals(skipFacet)) {
+                preds.add(facetPredicate(root, cb, "playerPerspectives", splitCsvLower(perspective), matchAll));
             }
 
-            if (isSet(tags)) {
-                // CSV is AND: one inner join per tag, so a row must carry all of them.
-                for (String wanted : splitCsvLower(tags)) {
-                    var tagJoin = root.join("tags", JoinType.INNER);
-                    preds.add(cb.equal(cb.lower(tagJoin.get("name")), wanted));
-                }
+            if (isSet(tags) && !"tags".equals(skipFacet)) {
+                preds.add(facetPredicate(root, cb, "tags", splitCsvLower(tags), matchAll));
             }
 
             if (ratingFrom != null) {
@@ -461,6 +467,19 @@ public class GameService {
 
             return cb.and(preds.toArray(new Predicate[0]));
         };
+    }
+
+    // all: one inner join per value, so a row must carry every one; any: one join matching the list.
+    private static Predicate facetPredicate(Root<Game> root, CriteriaBuilder cb, String collection,
+                                            List<String> wanted, boolean matchAll) {
+        if (!matchAll) {
+            return cb.lower(root.join(collection, JoinType.INNER).<String>get("name")).in(wanted);
+        }
+        List<Predicate> each = new ArrayList<>();
+        for (String value : wanted) {
+            each.add(cb.equal(cb.lower(root.join(collection, JoinType.INNER).<String>get("name")), value));
+        }
+        return cb.and(each.toArray(new Predicate[0]));
     }
 
     @Transactional
