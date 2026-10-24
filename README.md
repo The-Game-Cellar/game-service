@@ -129,7 +129,7 @@ The read endpoints are used by the recommendation-service per-user worker. Prote
 | `KEYCLOAK_ISSUER_URI`                 | `http://localhost:8080/realms/game-cellar` | JWT issuer                               |
 | `TWITCH_CLIENT_ID`                    | _none_                             | Twitch app client ID (IGDB inherits Twitch OAuth)|
 | `TWITCH_CLIENT_SECRET`                | _none_                             | Twitch app secret                                |
-| `IGDB_API_BASE_URL`                   | `https://api.igdb.com/v4`          | Override only for testing against a mock         |
+| `IGDB_API_BASE_URL`                   | `https://api.igdb.com/v4`          | IGDB API root; the client's host allowlist lets only `https://api.igdb.com` through |
 | `IGDB_CONNECT_TIMEOUT` / `IGDB_READ_TIMEOUT` | `2000` / `10000`            | IGDB client timeouts (ms) on the request path: search, detail, browse fallback |
 | `IGDB_WORKER_ENABLED`                 | `true`                             | Master switch for the nightly worker             |
 | `IGDB_WORKER_DISCOVERY_PAGES`         | `50`                               | Pages per nightly run (50 x 500 = 25k)           |
@@ -172,15 +172,13 @@ Flyway runs migrations on startup. `baseline-on-migrate: true` stamps existing d
 docker compose up game-service
 ```
 
-The worker is disabled in tests via `IGDB_WORKER_ENABLED=false`.
-
 ## Tests
 
 ```bash
 ./mvnw test
 ```
 
-Covers controllers (`MockMvc`), services with mocked IGDB clients, the cache stale-check logic, the platform-name normalizer, and the worker's pagination behaviour.
+Needs a running Docker daemon: the Spring tests start one PostgreSQL 17 container through Testcontainers, the Flyway migrations build the schema and Hibernate validates against it. Every endpoint is driven over HTTP through the security chain, and every repository query and scheduled job runs against that database. IGDB and Twitch are stubbed under the client's `RestTemplate`, so the real client builds the requests and maps the responses. The schedules are switched off in the test profile and the tests run the jobs themselves. Plain unit tests cover the mapping, normalisation and scoring logic.
 
 ## License
 

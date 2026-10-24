@@ -2,14 +2,11 @@ package com.thegamecellar.gameservice.controller;
 
 import com.thegamecellar.gameservice.model.entity.Game;
 import com.thegamecellar.gameservice.repository.GameRepository;
+import com.thegamecellar.gameservice.support.GameServiceTestBase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 
@@ -18,24 +15,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@Transactional
-class CellarRatingEndpointTest {
+class CellarRatingEndpointTest extends GameServiceTestBase {
 
     private static final String PATH = "/internal/games/ratings";
-    private static final String TOKEN_HEADER = "X-Internal-Token";
-    private static final String TOKEN = "test-internal-token";
-
-    @Autowired
-    private MockMvc mvc;
+    private static final String TOKEN_HEADER = INTERNAL_HEADER;
+    private static final String TOKEN = INTERNAL_TOKEN;
 
     @Autowired
     private GameRepository gameRepository;
 
     @BeforeEach
     void seed() {
-        gameRepository.deleteAll();
         gameRepository.save(Game.builder().igdbId(1942).name("The Witcher 3").build());
         gameRepository.save(Game.builder().igdbId(7346).name("Breath of the Wild").build());
     }

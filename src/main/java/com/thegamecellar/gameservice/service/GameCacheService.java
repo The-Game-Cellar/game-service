@@ -92,6 +92,12 @@ public class GameCacheService {
         return gameRepository.save(game);
     }
 
+    // For callers outside a transaction: the row is loaded here, so refreshStaleGame can read its lazy collections.
+    @Transactional
+    public Game refreshStaleGameById(Long gameId, IgdbGameDto dto) {
+        return refreshStaleGame(gameRepository.findById(gameId).orElseThrow(), dto);
+    }
+
     @Transactional
     public Game refreshStaleGame(Game game, IgdbGameDto dto) {
         if (game.getTags().isEmpty()) {
