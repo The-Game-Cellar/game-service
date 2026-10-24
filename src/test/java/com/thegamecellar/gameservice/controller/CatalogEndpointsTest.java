@@ -165,9 +165,58 @@ class CatalogEndpointsTest extends GameServiceTestBase {
     }
 
     @Test
-    void severalGenresMustAllBePresentAndMatchIgnoresCase() throws Exception {
-        as(get("/api/v1/games/search").param("genre", "role-playing (rpg),SIMULATOR"))
+    void withMatchAllSeveralGenresMustAllBePresentAndMatchIgnoresCase() throws Exception {
+        as(get("/api/v1/games/search").param("genre", "role-playing (rpg),SIMULATOR").param("match", "all"))
                 .andExpect(jsonPath("$.games[*].igdbId", contains(17000)));
+    }
+
+    // any is the default: a game carrying one of the chosen values is enough.
+    @Test
+    void withMatchAnyOrNoMatchSeveralGenresMatchAnyOfThem() throws Exception {
+        as(get("/api/v1/games/search").param("genre", "role-playing (rpg),SIMULATOR").param("match", "any"))
+                .andExpect(jsonPath("$.games[*].igdbId", containsInAnyOrder(1942, 1941, 17000)));
+        as(get("/api/v1/games/search").param("genre", "role-playing (rpg),SIMULATOR"))
+                .andExpect(jsonPath("$.games[*].igdbId", containsInAnyOrder(1942, 1941, 17000)));
+    }
+
+    @Test
+    void matchGovernsTagsGameModesAndPerspectivesToo() throws Exception {
+        as(get("/api/v1/games/search").param("tags", "open world,pixel art"))
+                .andExpect(jsonPath("$.games[*].igdbId", containsInAnyOrder(1942, 17000)));
+        as(get("/api/v1/games/search").param("tags", "open world,pixel art").param("match", "all"))
+                .andExpect(jsonPath("$.games").isEmpty());
+        as(get("/api/v1/games/search").param("gameMode", "Single player,Multiplayer"))
+                .andExpect(jsonPath("$.games[*].igdbId", containsInAnyOrder(1942, 1941, 17000)));
+        as(get("/api/v1/games/search").param("gameMode", "Single player,Multiplayer").param("match", "all"))
+                .andExpect(jsonPath("$.games[*].igdbId", contains(17000)));
+        as(get("/api/v1/games/search").param("perspective", "Third person,Bird view / Isometric"))
+                .andExpect(jsonPath("$.games[*].igdbId", containsInAnyOrder(1942, 1941, 17000)));
+        as(get("/api/v1/games/search").param("perspective", "Third person,Bird view / Isometric").param("match", "all"))
+                .andExpect(jsonPath("$.games").isEmpty());
+    }
+
+    // Platform always takes any, whatever match says.
+    @Test
+    void platformTakesAnyEvenUnderMatchAll() throws Exception {
+        as(get("/api/v1/games/search").param("platform", "playstation 5,Nintendo Switch").param("match", "all").param("pageSize", "50"))
+                .andExpect(jsonPath("$.games[*].igdbId", containsInAnyOrder(1942, 17000, 4000, 5001)));
+    }
+
+    // Under any a facet's own picks stay out of its counts, so each genre shows what picking it would add, while
+    // the other facets are counted over the match. Under all every count is over the match itself.
+    @Test
+    void facetCountsLeaveAFacetsOwnPicksOutUnderAnyAndKeepThemUnderAll() throws Exception {
+        as(get("/api/v1/games/search").param("genre", "Simulator"))
+                .andExpect(jsonPath("$.games[*].igdbId", contains(17000)))
+                .andExpect(jsonPath("$.availableGenreCounts['" + RPG + "']").value(3))
+                .andExpect(jsonPath("$.availableGenreCounts.Adventure").value(3))
+                .andExpect(jsonPath("$.availableGenreCounts.Simulator").value(1))
+                .andExpect(jsonPath("$.availableTagCounts['pixel art']").value(1))
+                .andExpect(jsonPath("$.availableTagCounts['open world']").value(0));
+        as(get("/api/v1/games/search").param("genre", "Simulator").param("match", "all"))
+                .andExpect(jsonPath("$.availableGenreCounts['" + RPG + "']").value(1))
+                .andExpect(jsonPath("$.availableGenreCounts.Adventure").value(0))
+                .andExpect(jsonPath("$.availableGenreCounts.Simulator").value(1));
     }
 
     @Test
@@ -178,10 +227,10 @@ class CatalogEndpointsTest extends GameServiceTestBase {
     }
 
     @Test
-    void severalTagsMustAllBePresent() throws Exception {
-        as(get("/api/v1/games/search").param("tags", "open world,story rich"))
+    void withMatchAllSeveralTagsMustAllBePresent() throws Exception {
+        as(get("/api/v1/games/search").param("tags", "open world,story rich").param("match", "all"))
                 .andExpect(jsonPath("$.games[*].igdbId", contains(1942)));
-        as(get("/api/v1/games/search").param("tags", "story rich,open world"))
+        as(get("/api/v1/games/search").param("tags", "story rich,open world").param("match", "all"))
                 .andExpect(jsonPath("$.games[*].igdbId", contains(1942)));
         as(get("/api/v1/games/search").param("tags", "story rich"))
                 .andExpect(jsonPath("$.games[*].igdbId", contains(1942, 1941)));
@@ -238,7 +287,7 @@ class CatalogEndpointsTest extends GameServiceTestBase {
 
     @ParameterizedTest
     @ValueSource(strings = {"ordering=rating", "gameType=dlc", "page=501", "page=-1", "pageSize=0",
-            "pageSize=101", "ratingFrom=high", "releasedFrom=soon"})
+            "pageSize=101", "ratingFrom=high", "releasedFrom=soon", "match=some", "match=ANY"})
     void searchRejectsInvalidParametersWith400(String param) throws Exception {
         String[] kv = param.split("=");
         as(get("/api/v1/games/search").param(kv[0], kv[1])).andExpect(status().isBadRequest());

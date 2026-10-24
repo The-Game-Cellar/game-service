@@ -13,11 +13,9 @@ public class GameSearchResponse {
     private Integer totalCount;
     private Integer page;
     private Integer pageSize;
-    // Per-tag match-count over the same filter spec; lets the Tags dropdown gray out tags whose
-    // selection would yield zero results. Null when not computed (non-DB paths, IGDB fallback).
+    // Matching games per facet value, null when not computed (no user filter, IGDB fallback). Under match=any a
+    // facet's own picks are left out of its counts, so a value shows what a click on it would add.
     private Map<String, Long> availableTagCounts;
-    // Same idea for single-pick dropdowns. Each count uses spec WITHOUT that dropdown's predicate
-    // so the value = "om jag valde X istället för current". Stable under switching, not additive.
     private Map<String, Long> availableGenreCounts;
     private Map<String, Long> availableGameModeCounts;
     private Map<String, Long> availablePerspectiveCounts;
