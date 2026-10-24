@@ -653,15 +653,19 @@ public class GameService {
         int processed = 0;
         int updated = 0;
         int batchSize = 100;
+        long lastId = 0L;
 
         while (true) {
-            List<Game> batch = gameRepository.findByDevelopersIsNull(PageRequest.of(0, batchSize));
+            // Id cursor, not page 0: a game IGDB lists no developer for stays NULL and would be re-read forever.
+            List<Game> batch = gameRepository.findByDevelopersIsNullAndIdGreaterThanOrderByIdAsc(
+                    lastId, PageRequest.of(0, batchSize));
             if (batch.isEmpty()) break;
             for (Game game : batch) {
+                lastId = game.getId();
                 try {
                     IgdbGameDto dto = igdbApiClient.fetchGameById(game.getIgdbId());
-                    gameCacheService.refreshStaleGame(game, dto);
-                    if (game.getDevelopers() != null) updated++;
+                    Game refreshed = gameCacheService.refreshStaleGameById(game.getId(), dto);
+                    if (refreshed.getDevelopers() != null) updated++;
                 } catch (Exception e) {
                     log.warn("Developer backfill: failed for igdbId={}: {}", game.getIgdbId(), e.getMessage());
                 }

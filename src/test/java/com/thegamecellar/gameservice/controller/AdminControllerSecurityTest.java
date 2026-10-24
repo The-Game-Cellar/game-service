@@ -1,48 +1,70 @@
 package com.thegamecellar.gameservice.controller;
 
-import com.thegamecellar.gameservice.service.AdminSyncExecutor;
+import com.thegamecellar.gameservice.support.GameServiceTestBase;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import java.util.concurrent.CountDownLatch;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-class AdminControllerSecurityTest {
+// The admin prefix is guarded by ROLE_ADMIN, which the app's converter reads from the token's realm roles.
+class AdminControllerSecurityTest extends GameServiceTestBase {
 
-    @Autowired
-    private MockMvc mvc;
+    private static final String ADMIN_PREFIX = "/api/v1/admin";
 
-    @MockitoBean
-    private AdminSyncExecutor adminSyncExecutor;
+    private static MockHttpServletRequestBuilder request(String endpoint) {
+        String[] parts = endpoint.split(" ", 2);
+        return "GET".equals(parts[0]) ? get(ADMIN_PREFIX + parts[1]) : post(ADMIN_PREFIX + parts[1]);
+    }
 
-    @Test
-    void adminEndpoint_withoutAuthentication_returns401() throws Exception {
-        mvc.perform(get("/api/v1/admin/sync/status"))
+    @ParameterizedTest
+    @ValueSource(strings = {"GET /sync/status", "POST /sync", "POST /sync/quick", "POST /background-art",
+            "POST /backfill-developers", "POST /prune-tags", "POST /derive-genres",
+            "POST /backfill-release-data", "POST /migrate-rating-scale"})
+    void withoutATokenOrWithARejectedOneEveryAdminEndpointAnswers401(String endpoint) throws Exception {
+        mvc.perform(request(endpoint)).andExpect(status().isUnauthorized());
+        mvc.perform(request(endpoint).header(HttpHeaders.AUTHORIZATION, bearer("forged")))
                 .andExpect(status().isUnauthorized());
+        assertThat(adminSyncExecutor.isRunning()).isFalse();
     }
 
-    @Test
-    void adminEndpoint_withoutAdminRole_returns403() throws Exception {
-        mvc.perform(get("/api/v1/admin/sync/status")
-                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_USER"))))
+    @ParameterizedTest
+    @ValueSource(strings = {"GET /sync/status", "POST /sync", "POST /sync/quick", "POST /background-art",
+            "POST /backfill-developers", "POST /prune-tags", "POST /derive-genres",
+            "POST /backfill-release-data", "POST /migrate-rating-scale"})
+    void aUserWithoutTheAdminRealmRoleGets403FromEveryAdminEndpoint(String endpoint) throws Exception {
+        mvc.perform(request(endpoint).header(HttpHeaders.AUTHORIZATION, bearer(USER_TOKEN)))
                 .andExpect(status().isForbidden());
+        assertThat(adminSyncExecutor.isRunning()).isFalse();
     }
 
     @Test
-    void adminEndpoint_withAdminRole_returns200() throws Exception {
-        when(adminSyncExecutor.isRunning()).thenReturn(false);
+    void theAdminRealmRoleOpensTheAdminPrefixAndSyncStatusReportsARunningJob() throws Exception {
+        mvc.perform(get(ADMIN_PREFIX + "/sync/status").header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.running").value(false));
 
-        mvc.perform(get("/api/v1/admin/sync/status")
-                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
-                .andExpect(status().isOk());
+        CountDownLatch release = new CountDownLatch(1);
+        adminSyncExecutor.trySubmit("held", () -> {
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        try {
+            mvc.perform(get(ADMIN_PREFIX + "/sync/status").header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_TOKEN)))
+                    .andExpect(jsonPath("$.running").value(true));
+        } finally {
+            release.countDown();
+        }
     }
 }

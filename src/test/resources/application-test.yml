@@ -1,0 +1,41 @@
+# Overrides on top of the production application.yml, which loads first. The datasource and Flyway
+# connection come from the Postgres container in GameServiceTestBase.
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri:
+          jwk-set-uri: https://example.com/.well-known/jwks.json
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+security:
+  internal:
+    token: test-internal-token
+
+# "-" switches a cron off, so no scheduled pass fires mid-suite; the tests drive the jobs themselves.
+igdb:
+  client-id: test-client-id
+  client-secret: test-client-secret
+  api:
+    base-url: https://api.igdb.com/v4
+  worker:
+    enabled: true
+    cron: "-"
+    discovery-limit: 500
+    discovery-pages: 3
+    new-releases-pages: 2
+    upcoming-pages: 2
+    rate-limit-delay-ms: 0
+    retry-delay-ms: 0
+  background-art:
+    cron: "-"
+    download-delay-ms: 0
+
+similarity:
+  worker:
+    initial-delay-ms: 3600000

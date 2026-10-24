@@ -28,22 +28,7 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
             """)
     int clearCellarRatingsNotFromRun(@Param("runId") String runId);
 
-    // Default filter: category IN (0, 8) OR NULL. Remakes count as main games; variants live in the *Variants methods below.
-
-    @Query("SELECT DISTINCT g FROM Game g JOIN g.tags t WHERE LOWER(t.name) IN (:tagNames) AND (g.category IN (0, 8) OR g.category IS NULL)")
-    List<Game> findByTagNamesIn(@Param("tagNames") List<String> tagNames);
-
-    @Query("SELECT g FROM Game g WHERE g.id IN (SELECT DISTINCT g2.id FROM Game g2 JOIN g2.genres gen WHERE LOWER(gen.name) = LOWER(:genreName)) AND (g.category IN (0, 8) OR g.category IS NULL)")
-    List<Game> findByGenreName(@Param("genreName") String genreName, Pageable pageable);
-
-    @Query("SELECT COUNT(DISTINCT g.id) FROM Game g JOIN g.genres gen WHERE LOWER(gen.name) = LOWER(:genreName) AND (g.category IN (0, 8) OR g.category IS NULL)")
-    long countByGenreName(@Param("genreName") String genreName);
-
-    @Query("SELECT g FROM Game g WHERE g.id IN (SELECT DISTINCT g2.id FROM Game g2 JOIN g2.genres gen JOIN g2.platforms p WHERE LOWER(gen.name) = LOWER(:genreName) AND LOWER(p.name) = LOWER(:platformName)) AND (g.category IN (0, 8) OR g.category IS NULL)")
-    List<Game> findByGenreAndPlatformName(@Param("genreName") String genreName, @Param("platformName") String platformName, Pageable pageable);
-
-    @Query("SELECT COUNT(DISTINCT g.id) FROM Game g JOIN g.genres gen JOIN g.platforms p WHERE LOWER(gen.name) = LOWER(:genreName) AND LOWER(p.name) = LOWER(:platformName) AND (g.category IN (0, 8) OR g.category IS NULL)")
-    long countByGenreAndPlatformName(@Param("genreName") String genreName, @Param("platformName") String platformName);
+    // Main-game filter: category IN (0, 8) OR NULL. Remakes count as main games.
 
     @Query(value = "SELECT * FROM games WHERE category IN (0, 8) OR category IS NULL ORDER BY RANDOM() LIMIT :limit", nativeQuery = true)
     List<Game> findRandom(@Param("limit") int limit);
@@ -67,49 +52,7 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
                                         @Param("minVotes") int minVotes,
                                         @Param("limit") int limit);
 
-    @Query(value = "SELECT g FROM Game g WHERE g.category IN (0, 8) OR g.category IS NULL",
-           countQuery = "SELECT COUNT(g) FROM Game g WHERE g.category IN (0, 8) OR g.category IS NULL")
-    org.springframework.data.domain.Page<Game> findAllMainGames(Pageable pageable);
-
-    // Variants-only: category > 2 AND <> 8. Excludes DLC/Expansion (in DLC stack) + Remake (in main).
-
-    @Query(value = "SELECT g FROM Game g WHERE g.category > 2 AND g.category <> 8",
-           countQuery = "SELECT COUNT(g) FROM Game g WHERE g.category > 2 AND g.category <> 8")
-    org.springframework.data.domain.Page<Game> findAllVariants(Pageable pageable);
-
-    @Query("SELECT g FROM Game g WHERE g.id IN (SELECT DISTINCT g2.id FROM Game g2 JOIN g2.genres gen WHERE LOWER(gen.name) = LOWER(:genreName)) AND g.category > 2 AND g.category <> 8")
-    List<Game> findVariantsByGenreName(@Param("genreName") String genreName, Pageable pageable);
-
-    @Query("SELECT COUNT(DISTINCT g.id) FROM Game g JOIN g.genres gen WHERE LOWER(gen.name) = LOWER(:genreName) AND g.category > 2 AND g.category <> 8")
-    long countVariantsByGenreName(@Param("genreName") String genreName);
-
-    @Query("SELECT g FROM Game g WHERE g.id IN (SELECT DISTINCT g2.id FROM Game g2 JOIN g2.genres gen JOIN g2.platforms p WHERE LOWER(gen.name) = LOWER(:genreName) AND LOWER(p.name) = LOWER(:platformName)) AND g.category > 2 AND g.category <> 8")
-    List<Game> findVariantsByGenreAndPlatformName(@Param("genreName") String genreName, @Param("platformName") String platformName, Pageable pageable);
-
-    @Query("SELECT COUNT(DISTINCT g.id) FROM Game g JOIN g.genres gen JOIN g.platforms p WHERE LOWER(gen.name) = LOWER(:genreName) AND LOWER(p.name) = LOWER(:platformName) AND g.category > 2 AND g.category <> 8")
-    long countVariantsByGenreAndPlatformName(@Param("genreName") String genreName, @Param("platformName") String platformName);
-
-    // Empty-string sentinels (not NULL) because PG JDBC binds NULL as bytea, breaking LOWER(?) wrap.
-    @Query("SELECT DISTINCT g FROM Game g " +
-            "LEFT JOIN g.gameModes gm " +
-            "LEFT JOIN g.playerPerspectives pp " +
-            "WHERE (g.category IN (0, 8) OR g.category IS NULL) " +
-            "AND (:gameMode = '' OR LOWER(gm.name) = LOWER(:gameMode)) " +
-            "AND (:perspective = '' OR LOWER(pp.name) = LOWER(:perspective))")
-    List<Game> findByGameModeAndPerspective(@Param("gameMode") String gameMode,
-                                              @Param("perspective") String perspective,
-                                              Pageable pageable);
-
-    @Query("SELECT COUNT(DISTINCT g.id) FROM Game g " +
-            "LEFT JOIN g.gameModes gm " +
-            "LEFT JOIN g.playerPerspectives pp " +
-            "WHERE (g.category IN (0, 8) OR g.category IS NULL) " +
-            "AND (:gameMode = '' OR LOWER(gm.name) = LOWER(:gameMode)) " +
-            "AND (:perspective = '' OR LOWER(pp.name) = LOWER(:perspective))")
-    long countByGameModeAndPerspective(@Param("gameMode") String gameMode,
-                                         @Param("perspective") String perspective);
-
-    List<Game> findByDevelopersIsNull(Pageable pageable);
+    List<Game> findByDevelopersIsNullAndIdGreaterThanOrderByIdAsc(Long id, Pageable pageable);
 
     long countByDevelopersIsNull();
 
@@ -162,10 +105,6 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
             "AND (g.category IN (0, 8) OR g.category IS NULL) " +
             "ORDER BY p.name")
     List<String> findDistinctUpcomingPlatformNames(@Param("nowEpochSeconds") long nowEpochSeconds);
-
-    @Query(value = "SELECT g FROM Game g",
-           countQuery = "SELECT COUNT(g) FROM Game g")
-    org.springframework.data.domain.Page<Game> findAllForBackfill(Pageable pageable);
 
     // Strict-prefix + " - "/": " separator match. Caller picks longest = most specific parent.
     @Query("SELECT g FROM Game g WHERE g.id <> :childDbId " +

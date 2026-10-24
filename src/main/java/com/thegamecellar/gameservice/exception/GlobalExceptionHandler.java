@@ -7,7 +7,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -37,12 +41,25 @@ public class GlobalExceptionHandler {
             MethodArgumentNotValidException.class,
             ConstraintViolationException.class,
             MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class,
+            HttpMessageNotReadableException.class,
             IllegalArgumentException.class
     })
     public ResponseEntity<ErrorResponse> handleBadRequest(Exception ex, HttpServletRequest request) {
         log.info("Bad request: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of(HttpStatus.BAD_REQUEST.value(), ex.getMessage(), request));
+    }
+
+    // Spring's exceptions carry their own status (405, 415, 406) and headers such as Allow.
+    @ExceptionHandler({HttpRequestMethodNotSupportedException.class, HttpMediaTypeException.class})
+    public ResponseEntity<ErrorResponse> handleUnsupported(Exception ex, HttpServletRequest request) {
+        org.springframework.web.ErrorResponse springError = (org.springframework.web.ErrorResponse) ex;
+        int status = springError.getStatusCode().value();
+        log.warn("Rejected {} {}: {}", request.getMethod(), request.getRequestURI(), ex.getClass().getSimpleName());
+        return ResponseEntity.status(status)
+                .headers(springError.getHeaders())
+                .body(ErrorResponse.of(status, HttpStatus.valueOf(status).getReasonPhrase(), request));
     }
 
     @ExceptionHandler(DataAccessException.class)

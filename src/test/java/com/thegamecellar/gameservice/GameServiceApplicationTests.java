@@ -1,13 +1,23 @@
 package com.thegamecellar.gameservice;
 
+import com.thegamecellar.gameservice.support.GameServiceTestBase;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
-@SpringBootTest
-class GameServiceApplicationTests {
+import static org.assertj.core.api.Assertions.assertThat;
+
+// The context starts on Postgres with Flyway on and ddl-auto=validate, so it only comes up when the
+// migrations build exactly the schema the entities expect.
+class GameServiceApplicationTests extends GameServiceTestBase {
 
     @Test
-    void contextLoads() {
-    }
+    void everyMigrationRanAndTheEntitiesValidateAgainstTheSchema() throws Exception {
+        int files = new PathMatchingResourcePatternResolver().getResources("classpath:db/migration/V*.sql").length;
 
+        Integer applied = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL", Integer.class);
+
+        assertThat(files).isPositive();
+        assertThat(applied).isEqualTo(files);
+    }
 }
