@@ -17,6 +17,7 @@ import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
@@ -371,6 +372,54 @@ class CatalogEndpointsTest extends GameServiceTestBase {
     @ValueSource(strings = {"0", "501", "many"})
     void randomRejectsAnOutOfRangeLimitWith400(String limit) throws Exception {
         as(get("/api/v1/games/random").param("limit", limit)).andExpect(status().isBadRequest());
+    }
+
+    // The PlayStation-only games stay out; unreleased games are as eligible as released ones, and the
+    // PC bundle and DLC are not main games.
+    @Test
+    void randomOnPlatformsDealsMainGamesOnThosePlatformsOnly() throws Exception {
+        as(get("/api/v1/games/random").param("limit", "50").param("platform", "PC", "Nintendo Switch"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.games[*].igdbId", containsInAnyOrder(1942, 1941, 17000, 5002, 5003)));
+        as(get("/api/v1/games/random").param("limit", "50").param("platform", "Dreamcast"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.games", empty()));
+    }
+
+    @Test
+    void aBlankPlatformDrawsFromTheWholeCatalog() throws Exception {
+        as(get("/api/v1/games/random").param("limit", "50").param("platform", " "))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.games[*].igdbId", containsInAnyOrder(1942, 1941, 17000, 4000, 5001, 5002, 5003)));
+    }
+
+    // Saturn's one game against Dreamcast's six: split evenly, a limit of 2 is one each, so the Saturn
+    // game is in every hand; a draw over both platforms together would leave it out a third of the time.
+    @Test
+    void randomSplitsTheLimitEvenlyAcrossThePlatforms() throws Exception {
+        for (int i = 1; i <= 6; i++) {
+            games.save(Game.builder().igdbId(7000 + i).name("Dreamcast " + i).category(0).platforms(set(platform("Dreamcast"))).build());
+        }
+        games.save(Game.builder().igdbId(7100).name("Saturn only").category(0).platforms(set(platform("Saturn"))).build());
+
+        for (int round = 0; round < 10; round++) {
+            as(get("/api/v1/games/random").param("limit", "2").param("platform", "Dreamcast", "Saturn"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.games", hasSize(2)))
+                    .andExpect(jsonPath("$.games[*].igdbId", hasItem(7100)));
+        }
+        as(get("/api/v1/games/random").param("limit", "1").param("platform", "Dreamcast", "Saturn"))
+                .andExpect(jsonPath("$.games", hasSize(1)));
+    }
+
+    @Test
+    void randomTakesFiftyPlatformsAndRejectsMoreWith400() throws Exception {
+        String[] fifty = java.util.stream.IntStream.range(0, 50).mapToObj(i -> "Platform " + i).toArray(String[]::new);
+        String[] fiftyOne = java.util.Arrays.copyOf(fifty, 51);
+        fiftyOne[50] = "Platform 50";
+
+        as(get("/api/v1/games/random").param("platform", fifty)).andExpect(status().isOk());
+        as(get("/api/v1/games/random").param("platform", fiftyOne)).andExpect(status().isBadRequest());
     }
 
     @Test

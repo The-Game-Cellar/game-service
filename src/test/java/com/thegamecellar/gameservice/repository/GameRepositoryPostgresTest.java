@@ -67,6 +67,36 @@ class GameRepositoryPostgresTest extends GameServiceTestBase {
     }
 
     @Test
+    void findRandomOnPlatforms_dealsMainGamesOnTheNamedPlatformsOnceEach() {
+        save(Game.builder().igdbId(1).name("PS5 main").category(0).platforms(set(platform("PlayStation 5"))));
+        save(Game.builder().igdbId(2).name("PS5 DLC").category(1).platforms(set(platform("PlayStation 5"))));
+        save(Game.builder().igdbId(3).name("PC main").category(0).platforms(set(platform("PC"))));
+        save(Game.builder().igdbId(4).name("On both").category(0).platforms(set(platform("PC"), platform("PlayStation 5"))));
+        save(Game.builder().igdbId(5).name("Switch main").category(0).platforms(set(platform("Nintendo Switch"))));
+        save(Game.builder().igdbId(6).name("PC remake").category(8).platforms(set(platform("PC"))));
+        save(Game.builder().igdbId(7).name("PC uncategorised").platforms(set(platform("PC"))));
+
+        assertThat(ids(games.findRandomOnPlatforms(List.of("PlayStation 5", "PC"), 10, 40)))
+                .containsExactlyInAnyOrder(1, 3, 4, 6, 7);
+        assertThat(games.findRandomOnPlatforms(List.of("Dreamcast"), 10, 40)).isEmpty();
+    }
+
+    // perPlatform caps each platform's share; sample caps the rows drawn before the category filter.
+    @Test
+    void findRandomOnPlatforms_capsEachPlatformAtItsShareAndItsSample() {
+        for (int i = 1; i <= 6; i++) {
+            save(Game.builder().igdbId(i).name("PC " + i).category(0).platforms(set(platform("PC"))));
+            save(Game.builder().igdbId(100 + i).name("Switch " + i).category(0).platforms(set(platform("Nintendo Switch"))));
+        }
+
+        List<Game> drawn = games.findRandomOnPlatforms(List.of("PC", "Nintendo Switch"), 2, 40);
+        assertThat(drawn).hasSize(4);
+        assertThat(drawn).filteredOn(g -> g.getIgdbId() < 100).hasSize(2);
+
+        assertThat(games.findRandomOnPlatforms(List.of("PC", "Nintendo Switch"), 5, 1)).hasSize(2);
+    }
+
+    @Test
     void findRandomQualityByGenre_gatesOnGenreRatingVotesAndCategory() {
         save(Game.builder().igdbId(1).name("Good").category(0).totalRating(new BigDecimal("8.00")).totalRatingCount(50)
                 .genres(set(genre("Shooter"))));

@@ -33,6 +33,29 @@ public interface GameRepository extends JpaRepository<Game, Long>, JpaSpecificat
     @Query(value = "SELECT * FROM games WHERE category IN (0, 8) OR category IS NULL ORDER BY RANDOM() LIMIT :limit", nativeQuery = true)
     List<Game> findRandom(@Param("limit") int limit);
 
+    // Up to :perPlatform main games per named platform. Each platform's game_platforms rows are
+    // sampled first, so the random sort never runs over a large platform's whole joined catalog.
+    @Query(value = """
+            SELECT * FROM games WHERE id IN (
+                SELECT pick.id FROM platforms p
+                CROSS JOIN LATERAL (
+                    SELECT g.id FROM (
+                        SELECT gp.game_id FROM game_platforms gp
+                        WHERE gp.platform_id = p.id
+                        ORDER BY RANDOM()
+                        LIMIT :sample
+                    ) s
+                    JOIN games g ON g.id = s.game_id
+                    WHERE g.category IN (0, 8) OR g.category IS NULL
+                    LIMIT :perPlatform
+                ) pick
+                WHERE p.name IN (:platforms)
+            )
+            """, nativeQuery = true)
+    List<Game> findRandomOnPlatforms(@Param("platforms") java.util.Collection<String> platforms,
+                                     @Param("perPlatform") int perPlatform,
+                                     @Param("sample") int sample);
+
     // Uniform random over quality subset (rating + vote-count gated). Used by Rec Service candidate-pool gen.
     @Query(value = """
             SELECT g.* FROM games g

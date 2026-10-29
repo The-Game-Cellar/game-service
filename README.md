@@ -83,7 +83,7 @@ Note that the two IGDB scores are not what their names suggest: `rating` is the 
 | GET    | `/api/v1/games/{igdbId}`              | Full game detail by IGDB ID.                                                                             |
 | GET    | `/api/v1/games/popular`               | Popular games, optional platform filter.                                                                 |
 | POST   | `/api/v1/games/upcoming`              | Upcoming releases. Body `{ platform, windowDays, limit, excludeIds, recentlyShownIds, page, pageSize }`. `page == null` = sample-mode (A-Res inverse-days, recency × 0.5). `page != null` = paginated deterministic sort by release date. |
-| GET    | `/api/v1/games/random`                | Random games from the cache. `limit` max 500.                                                            |
+| GET    | `/api/v1/games/random`                | Random main games from the cache. `limit` max 500. Repeatable `platform` (max 50) draws only from those platforms, with `limit` split evenly across them. |
 | GET    | `/api/v1/games/genres`                | All genres (cache first, IGDB fallback).                                                                 |
 | GET    | `/api/v1/games/platforms`             | All platform names from the local catalog.                                                               |
 | GET    | `/api/v1/platforms/catalog`           | Curated platform catalog (`is_preference_eligible = TRUE`) with manufacturer category + display order. Drives the Preferences picker. |

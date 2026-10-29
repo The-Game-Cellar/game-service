@@ -61,6 +61,10 @@ public class GameService {
     @PersistenceContext
     private EntityManager em;
 
+    // Four sampled rows per game wanted still fills the share on a platform where only a quarter
+    // of its rows are main games; the rest are DLC, bundles and ports.
+    private static final int PLATFORM_SAMPLE_FACTOR = 4;
+
     // Mirrors frontend Explore GAME_MODES / PERSPECTIVES (values, not labels) so count badges
     // reflect the same curated set the user actually sees in the dropdowns.
     private static final List<String> CURATED_GAME_MODES = List.of(
@@ -533,9 +537,26 @@ public class GameService {
         return gameRepository.findDistinctUpcomingPlatformNames(now);
     }
 
+    // With platforms, limit is still the whole response, split evenly so every platform weighs the same.
     @Transactional(readOnly = true)
-    public GameSearchResponse getRandomGames(int limit) {
-        List<GameResponse> games = gameRepository.findRandom(limit).stream()
+    public GameSearchResponse getRandomGames(int limit, List<String> platforms) {
+        List<String> names = platforms == null ? List.of() : platforms.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(String::trim)
+                .filter(name -> !name.isEmpty())
+                .distinct()
+                .toList();
+        List<Game> drawn;
+        if (names.isEmpty()) {
+            drawn = gameRepository.findRandom(limit);
+        } else {
+            int perPlatform = (limit + names.size() - 1) / names.size();
+            drawn = new ArrayList<>(gameRepository.findRandomOnPlatforms(
+                    names, perPlatform, perPlatform * PLATFORM_SAMPLE_FACTOR));
+            java.util.Collections.shuffle(drawn);
+            if (drawn.size() > limit) drawn = drawn.subList(0, limit);
+        }
+        List<GameResponse> games = drawn.stream()
                 .map(entity -> GameMapper.toResponse(entity, cellarPriorWeight))
                 .toList();
         return GameSearchResponse.builder()
