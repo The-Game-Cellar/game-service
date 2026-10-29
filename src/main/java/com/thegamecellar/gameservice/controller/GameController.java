@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -80,10 +81,12 @@ public class GameController {
         return ResponseEntity.ok(Map.of("platforms", gameService.getUpcomingPlatformNames()));
     }
 
+    // Each platform costs its own sampled draw, so the list is capped.
     @GetMapping("/random")
     public ResponseEntity<GameSearchResponse> getRandomGames(
-            @RequestParam(defaultValue = "20") @Min(1) @Max(500) int limit) {
-        return ResponseEntity.ok(gameService.getRandomGames(limit));
+            @RequestParam(defaultValue = "20") @Min(1) @Max(500) int limit,
+            @RequestParam(required = false) @Size(max = 50) List<String> platform) {
+        return ResponseEntity.ok(gameService.getRandomGames(limit, platform));
     }
 
     @GetMapping("/random-quality")
